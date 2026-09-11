@@ -1,0 +1,100 @@
+@import 'leaflet/dist/leaflet.css';
+@import 'tailwindcss';
+
+@theme {
+  --color-background: #090D16;
+  --color-surface-default: #0F172A;
+  --color-surface-hover: #1E293B;
+  
+  --color-severity-critical: #EF4444;
+  --color-severity-high: #F97316;
+  --color-severity-medium: #EAB308;
+  --color-severity-low: #3B82F6;
+}
+
+body {
+  background-color: #090D16;
+  color: #F8FAFC;
+  font-family: 'Inter', system-ui, sans-serif;
+  min-height: 100vh;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.08) 0%, transparent 60%),
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+}
+
+/* Custom Scrollbar for Tactical Command UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090D16;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Custom Glow Utility Classes */
+.shadow-glow-critical {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.35);
+}
+
+.shadow-glow-high {
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.35);
+}
+
+.shadow-glow-emerald {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
+}
+
+/* Leaflet Custom DivIcon & Tactical Map Styling */
+.custom-map-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid #334155 !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: #0f172a !important;
+  border: 1px solid #334155 !important;
+}
+
+/* Dark Map Tile Layer Custom Filter for Tactical Command Center */
+.leaflet-container {
+  background-color: #0B0F19 !important;
+  font-family: inherit;
+}
+
+.tactical-dark-tiles .leaflet-tile {
+  filter: brightness(0.7) invert(1) contrast(1.35) hue-rotate(200deg) saturate(0.3);
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0F172A !important;
+  color: #F8FAFC !important;
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7) !important;
+  border-radius: 8px !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-tip {
+  background: #0F172A !important;
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+}
