@@ -39,13 +39,14 @@ export const DashboardPage: React.FC = () => {
   const totalShelterOccupancy = shelters.reduce((acc, s) => acc + s.currentOccupancy, 0);
 
   const handleResetData = async () => {
-    if (window.confirm('Wipe current live incidents and randomly generate new emergency incidents in target sector?')) {
-      try {
-        setIsResetting(true);
-        await resetState();
-      } finally {
-        setIsResetting(false);
-      }
+    if (isResetting) return;
+    try {
+      setIsResetting(true);
+      await resetState();
+    } catch (err) {
+      console.error('Reset mock state error:', err);
+    } finally {
+      setIsResetting(false);
     }
   };
 
