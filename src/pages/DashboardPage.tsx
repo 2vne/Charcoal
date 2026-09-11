@@ -6,6 +6,7 @@ import { SituationMap } from '../components/map/SituationMap';
 import { IncidentFeed } from '../components/dashboard/IncidentFeed';
 import { ResourceSummary } from '../components/dashboard/ResourceSummary';
 import { ShelterOverview } from '../components/dashboard/ShelterOverview';
+import { calculateHaversineDistance } from '../utils/aiRecommendationEngine';
 
 import {
   AlertTriangle,
@@ -59,6 +60,39 @@ export const DashboardPage: React.FC = () => {
     }
   }, [selectedIncidentId, incidents, getNearbyEmergencyPlaces]);
 
+  // Active incident selected
+  const activeIncident = useMemo(
+    () => incidents.find((i) => i.id === selectedIncidentId) || incidents[0],
+    [incidents, selectedIncidentId]
+  );
+
+  // Filter mobile units strictly in 5km radius of active incident
+  const inRadiusUnits = useMemo(() => {
+    if (!activeIncident?.location?.lat) return resources;
+    const incLat = activeIncident.location.lat;
+    const incLng = activeIncident.location.lng;
+    return resources.filter((r) => {
+      const resLat = r.currentLocation?.lat ?? 0;
+      const resLng = r.currentLocation?.lng ?? 0;
+      return calculateHaversineDistance(resLat, resLng, incLat, incLng) <= 5.0;
+    });
+  }, [resources, activeIncident]);
+
+  const activeInRadiusCount = useMemo(
+    () => inRadiusUnits.filter((r) => r.status === 'ON_SITE' || r.status === 'EN_ROUTE').length,
+    [inRadiusUnits]
+  );
+
+  const availableInRadiusCount = useMemo(
+    () => inRadiusUnits.filter((r) => r.status === 'AVAILABLE').length,
+    [inRadiusUnits]
+  );
+
+  const totalGlobalActiveCount = useMemo(
+    () => resources.filter((r) => r.status === 'ON_SITE' || r.status === 'EN_ROUTE').length,
+    [resources]
+  );
+
   // ── Derived live metrics (auto-reactive to any context state change) ─────────
   const criticalCount = useMemo(
     () => incidents.filter((i) => i.severity === 'CRITICAL').length,
@@ -68,16 +102,6 @@ export const DashboardPage: React.FC = () => {
   const strandedTotal = useMemo(
     () => incidents.reduce((acc, i) => acc + (i.strandedCount ?? 0), 0),
     [incidents]
-  );
-
-  const activeResources = useMemo(
-    () => resources.filter((r) => r.status === 'ON_SITE' || r.status === 'EN_ROUTE').length,
-    [resources]
-  );
-
-  const availableResources = useMemo(
-    () => resources.filter((r) => r.status === 'AVAILABLE').length,
-    [resources]
   );
 
   const totalShelterCapacity = useMemo(
@@ -108,7 +132,7 @@ export const DashboardPage: React.FC = () => {
   // Flash effects — fire when each derived value changes
   const criticalFlash = useFlash(criticalCount);
   const strandedFlash = useFlash(strandedTotal);
-  const deployedFlash = useFlash(activeResources);
+  const deployedFlash = useFlash(activeInRadiusCount);
   const shelterFlash = useFlash(shelterPct);
 
   const handleResetData = async () => {
@@ -151,12 +175,15 @@ export const DashboardPage: React.FC = () => {
 
         <div className={`transition-all duration-300 ${deployedFlash ? 'ring-2 ring-cyan-500/60 rounded-r-lg scale-[1.01]' : ''}`}>
           <StatCard
-            title="Deployed Units"
-            value={`${activeResources}/${resources.length}`}
-            subtitle="En Route & On-Site Units"
+            title="Deployed Units (In-Radius)"
+            value={`${activeInRadiusCount}/${inRadiusUnits.length}`}
+            subtitle={`Within 5km of ${activeIncident?.title ? activeIncident.title.slice(0, 20) + '...' : 'Incident Zone'}`}
             icon={Truck}
             accentColor="cyan"
-            trend={{ value: `${availableResources} Reserve Units Ready`, isPositive: availableResources > 0 }}
+            trend={{
+              value: `${availableInRadiusCount} Ready in Radius | ${totalGlobalActiveCount} Total Global Deployments`,
+              isPositive: availableInRadiusCount > 0,
+            }}
           />
         </div>
 
@@ -245,7 +272,11 @@ export const DashboardPage: React.FC = () => {
         {/* Right: Resources & Shelters */}
         <div className="lg:col-span-3 h-full flex flex-col gap-3 overflow-hidden">
           <div className="flex-1 min-h-0">
-            <ResourceSummary resources={resources} />
+            <ResourceSummary
+              resources={resources}
+              selectedIncident={activeIncident}
+              radiusMeters={5000}
+            />
           </div>
           <div className="flex-1 min-h-0">
             <ShelterOverview shelters={shelters} />
