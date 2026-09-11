@@ -52,10 +52,10 @@ const createIncidentIcon = (severity: string, strandedCount: number, isSelected:
     severity === 'CRITICAL'
       ? 'bg-red-600 border-red-400 ring-red-500/50'
       : severity === 'HIGH'
-      ? 'bg-orange-600 border-orange-400 ring-orange-500/50'
-      : severity === 'MEDIUM'
-      ? 'bg-amber-500 border-amber-300 ring-amber-500/50 text-slate-950'
-      : 'bg-blue-600 border-blue-400 ring-blue-500/50';
+        ? 'bg-orange-600 border-orange-400 ring-orange-500/50'
+        : severity === 'MEDIUM'
+          ? 'bg-amber-500 border-amber-300 ring-amber-500/50 text-slate-950'
+          : 'bg-blue-600 border-blue-400 ring-blue-500/50';
 
   const pulseAnimation = severity === 'CRITICAL' ? '<span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>' : '';
   const selectedBorder = isSelected ? 'ring-4 ring-cyan-400 scale-110 shadow-lg shadow-cyan-500/60 z-50' : '';
@@ -68,11 +68,10 @@ const createIncidentIcon = (severity: string, strandedCount: number, isSelected:
         <svg class="w-4 h-4 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
         </svg>
-        ${
-          strandedCount > 0
-            ? `<span class="absolute -bottom-2 bg-slate-950 text-amber-400 font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border border-amber-500/80 shadow-md whitespace-nowrap">👥 ${strandedCount}</span>`
-            : ''
-        }
+        ${strandedCount > 0
+        ? `<span class="absolute -bottom-2 bg-slate-950 text-amber-400 font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border border-amber-500/80 shadow-md whitespace-nowrap">👥 ${strandedCount}</span>`
+        : ''
+      }
       </div>
     `,
     iconSize: [36, 36],
@@ -88,8 +87,8 @@ const createShelterIcon = (occupied: number, capacity: number) => {
   const badgeColor = isFull
     ? 'bg-red-600 border-red-400 text-white'
     : pct > 75
-    ? 'bg-amber-500 border-amber-300 text-slate-950'
-    : 'bg-emerald-600 border-emerald-400 text-white';
+      ? 'bg-amber-500 border-amber-300 text-slate-950'
+      : 'bg-emerald-600 border-emerald-400 text-white';
 
   return L.divIcon({
     className: 'custom-map-icon',
@@ -111,8 +110,8 @@ const createResourceIcon = (status: string, callsign: string) => {
     status === 'EN_ROUTE'
       ? 'bg-cyan-600 border-cyan-300 text-white ring-2 ring-cyan-500/50 animate-pulse'
       : status === 'ON_SITE'
-      ? 'bg-emerald-600 border-emerald-300 text-white'
-      : 'bg-blue-600 border-blue-300 text-white';
+        ? 'bg-emerald-600 border-emerald-300 text-white'
+        : 'bg-blue-600 border-blue-300 text-white';
 
   return L.divIcon({
     className: 'custom-map-icon',
@@ -548,7 +547,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
 
   return (
     <div className="w-full relative border border-slate-800 rounded-lg overflow-hidden" style={{ height }}>
-      
+
       {/* Dynamic Tactical Map HUD Overlay */}
       <div className="absolute top-3 right-3 z-[1000] bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-lg p-2.5 shadow-2xl font-mono text-xs text-slate-200 space-y-2.5 max-w-[280px]">
         <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
@@ -584,33 +583,30 @@ export const SituationMap: React.FC<SituationMapProps> = ({
         <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-[10px]">
           <button
             onClick={() => setShowIncidents(!showIncidents)}
-            className={`px-1.5 py-0.5 rounded border transition-colors flex items-center gap-1 ${
-              showIncidents
+            className={`px-1.5 py-0.5 rounded border transition-colors flex items-center gap-1 ${showIncidents
                 ? 'bg-red-600/30 text-red-300 border-red-500/50'
                 : 'bg-slate-900 text-slate-500 border-slate-800'
-            }`}
+              }`}
           >
             <AlertTriangle className="w-3 h-3" />
             Incidents
           </button>
           <button
             onClick={() => setShowShelters(!showShelters)}
-            className={`px-1.5 py-0.5 rounded border transition-colors flex items-center gap-1 ${
-              showShelters
+            className={`px-1.5 py-0.5 rounded border transition-colors flex items-center gap-1 ${showShelters
                 ? 'bg-emerald-600/30 text-emerald-300 border-emerald-500/50'
                 : 'bg-slate-900 text-slate-500 border-slate-800'
-            }`}
+              }`}
           >
             <Home className="w-3 h-3" />
             Shelters
           </button>
           <button
             onClick={() => setShowResources(!showResources)}
-            className={`px-1.5 py-0.5 rounded border transition-colors flex items-center gap-1 ${
-              showResources
+            className={`px-1.5 py-0.5 rounded border transition-colors flex items-center gap-1 ${showResources
                 ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/50'
                 : 'bg-slate-900 text-slate-500 border-slate-800'
-            }`}
+              }`}
           >
             <Truck className="w-3 h-3" />
             Units
@@ -649,9 +645,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
           <div className="grid grid-cols-2 gap-1 text-[9.5px]">
             <button
               onClick={() => setShowHospitals(!showHospitals)}
-              className={`px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${
-                showHospitals ? 'bg-rose-950/60 text-rose-300 border-rose-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
-              }`}
+              className={`px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${showHospitals ? 'bg-rose-950/60 text-rose-300 border-rose-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
+                }`}
             >
               <span>🏥</span>
               <span>Hospitals</span>
@@ -659,9 +654,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
 
             <button
               onClick={() => setShowFireStations(!showFireStations)}
-              className={`px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${
-                showFireStations ? 'bg-orange-950/60 text-orange-300 border-orange-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
-              }`}
+              className={`px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${showFireStations ? 'bg-orange-950/60 text-orange-300 border-orange-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
+                }`}
             >
               <span>🚒</span>
               <span>Fire</span>
@@ -669,9 +663,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
 
             <button
               onClick={() => setShowPolice(!showPolice)}
-              className={`px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${
-                showPolice ? 'bg-blue-950/60 text-blue-300 border-blue-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
-              }`}
+              className={`px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${showPolice ? 'bg-blue-950/60 text-blue-300 border-blue-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
+                }`}
             >
               <span>👮</span>
               <span>Police</span>
@@ -679,9 +672,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
 
             <button
               onClick={() => setShowNgos(!showNgos)}
-              className={`px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${
-                showNgos ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
-              }`}
+              className={`px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${showNgos ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
+                }`}
             >
               <span>🟢</span>
               <span>NGOs</span>
@@ -689,9 +681,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
 
             <button
               onClick={() => setShowRescue(!showRescue)}
-              className={`col-span-2 px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${
-                showRescue ? 'bg-amber-950/60 text-amber-300 border-amber-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
-              }`}
+              className={`col-span-2 px-1.5 py-0.5 rounded border text-left flex items-center gap-1 transition-colors ${showRescue ? 'bg-amber-950/60 text-amber-300 border-amber-700/60' : 'bg-slate-900 text-slate-500 border-slate-800'
+                }`}
             >
               <span>🛟</span>
               <span>Rescue Services</span>
@@ -886,8 +877,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
                                 inc.status === 'REPORTED'
                                   ? 'DISPATCHED'
                                   : inc.status === 'DISPATCHED'
-                                  ? 'ON_SITE'
-                                  : 'RESOLVED'
+                                    ? 'ON_SITE'
+                                    : 'RESOLVED'
                               );
                             }}
                             className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/40 transition-colors"
@@ -895,8 +886,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
                             {inc.status === 'REPORTED'
                               ? 'DISPATCH'
                               : inc.status === 'DISPATCHED'
-                              ? 'MARK ON-SITE'
-                              : 'RESOLVE'}
+                                ? 'MARK ON-SITE'
+                                : 'RESOLVE'}
                           </button>
                         )}
                       </div>
@@ -909,64 +900,63 @@ export const SituationMap: React.FC<SituationMapProps> = ({
         {/* Dynamic Safe Shelter Markers (Strictly In-Radius Only) */}
         {showShelters &&
           filteredSheltersInRadius.map((s) => {
-              const occ = s.occupied ?? s.currentOccupancy ?? 0;
-              const cap = s.capacity || 100;
-              const pct = Math.min(100, Math.round((occ / cap) * 100));
+            const occ = s.occupied ?? s.currentOccupancy ?? 0;
+            const cap = s.capacity || 100;
+            const pct = Math.min(100, Math.round((occ / cap) * 100));
 
-              return (
-                <Marker
-                  key={s.id}
-                  position={[s.location.lat, s.location.lng]}
-                  icon={createShelterIcon(occ, cap)}
-                >
-                  <Popup>
-                    <div className="p-3 font-sans text-xs bg-slate-900 text-slate-100 rounded space-y-2 min-w-[210px]">
-                      <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-600 text-white uppercase">
-                          Safe Shelter
-                        </span>
-                        <span className="font-mono text-[10px] text-slate-400">{s.id}</span>
+            return (
+              <Marker
+                key={s.id}
+                position={[s.location.lat, s.location.lng]}
+                icon={createShelterIcon(occ, cap)}
+              >
+                <Popup>
+                  <div className="p-3 font-sans text-xs bg-slate-900 text-slate-100 rounded space-y-2 min-w-[210px]">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-600 text-white uppercase">
+                        Safe Shelter
+                      </span>
+                      <span className="font-mono text-[10px] text-slate-400">{s.id}</span>
+                    </div>
+
+                    <h4 className="font-bold text-sm text-slate-100 mt-1">{s.name}</h4>
+                    <p className="text-slate-300 text-[11px]">{s.location.address}</p>
+
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between text-[10px] font-mono">
+                        <span className="text-slate-400">Occupancy</span>
+                        <span className="text-cyan-400 font-bold">{occ} / {cap} ({pct}%)</span>
                       </div>
-
-                      <h4 className="font-bold text-sm text-slate-100 mt-1">{s.name}</h4>
-                      <p className="text-slate-300 text-[11px]">{s.location.address}</p>
-
-                      <div className="space-y-1 pt-1">
-                        <div className="flex justify-between text-[10px] font-mono">
-                          <span className="text-slate-400">Occupancy</span>
-                          <span className="text-cyan-400 font-bold">{occ} / {cap} ({pct}%)</span>
-                        </div>
-                        <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${
-                              pct > 90 ? 'bg-red-500' : pct > 75 ? 'bg-amber-500' : 'bg-emerald-500'
+                      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-red-500' : pct > 75 ? 'bg-amber-500' : 'bg-emerald-500'
                             }`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-1 pt-1 text-[10px] font-mono text-slate-400">
-                        <div>Water: <strong className="text-slate-200">{s.supplies?.waterDays ?? (s as any).waterSupplyDays ?? 3}d</strong></div>
-                        <div>Food: <strong className="text-slate-200">{s.supplies?.foodDays ?? (s as any).foodSupplyDays ?? 3}d</strong></div>
-                        <div>Medics: <strong className="text-slate-200">{s.medicalStaffCount ?? 2} staff</strong></div>
-                        <div>Status: <strong className="text-emerald-400">{s.status || 'OPEN'}</strong></div>
-                      </div>
-
-                      <div className="pt-2 border-t border-slate-800 flex justify-end">
-                        <a
-                          href={`tel:${s.contactPhone || '108'}`}
-                          className="flex items-center gap-1 text-[10px] font-mono font-bold text-cyan-400 hover:underline"
-                        >
-                          <Phone className="w-3 h-3" />
-                          <span>Contact Facility</span>
-                        </a>
+                          style={{ width: `${pct}%` }}
+                        />
                       </div>
                     </div>
-                  </Popup>
-                </Marker>
-              );
-            })}
+
+                    <div className="grid grid-cols-2 gap-1 pt-1 text-[10px] font-mono text-slate-400">
+                      <div>Water: <strong className="text-slate-200">{s.supplies?.waterDays ?? (s as any).waterSupplyDays ?? 3}d</strong></div>
+                      <div>Food: <strong className="text-slate-200">{s.supplies?.foodDays ?? (s as any).foodSupplyDays ?? 3}d</strong></div>
+                      <div>Medics: <strong className="text-slate-200">{s.medicalStaffCount ?? 2} staff</strong></div>
+                      <div>Status: <strong className="text-emerald-400">{s.status || 'OPEN'}</strong></div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800 flex justify-end">
+                      <a
+                        href={`tel:${s.contactPhone || '108'}`}
+                        className="flex items-center gap-1 text-[10px] font-mono font-bold text-cyan-400 hover:underline"
+                      >
+                        <Phone className="w-3 h-3" />
+                        <span>Contact Facility</span>
+                      </a>
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
         {/* Dynamic Resource Unit Markers (Strictly In-Radius Mobile & Deployed Units Only) */}
         {showResources &&
@@ -1027,7 +1017,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
                   </div>
 
                   <h4 className="font-bold text-sm text-slate-100">{place.name}</h4>
-                  
+
                   {place.address && <p className="text-slate-300 text-[11px]">{place.address}</p>}
 
                   <div className="grid grid-cols-2 gap-1 p-1.5 bg-slate-950 rounded border border-slate-800 font-mono text-[10px]">
