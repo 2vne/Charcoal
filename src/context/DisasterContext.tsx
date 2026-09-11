@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { mockDataService, DisasterState } from '../services/mockDataService';
 import { apiService, getSocket, normalizeIncident, normalizeResource, normalizeShelter } from '../services/apiService';
+import { convertEmergencyPlacesToResourceUnits } from '../utils/osmResourceGenerator';
 
 interface DisasterContextType {
   incidents: Incident[];
@@ -651,6 +652,28 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
+  const registerDynamicNearbyResources = (places: EmergencyPlace[]) => {
+    if (!places || places.length === 0) return;
+    const newUnits = convertEmergencyPlacesToResourceUnits(places);
+    setState((prev) => {
+      const existingIds = new Set(prev.resources.map((r) => r.id));
+      const toAdd = newUnits.filter((u) => !existingIds.has(u.id));
+      if (toAdd.length === 0) return prev;
+      return {
+        ...prev,
+        resources: [...prev.resources, ...toAdd],
+      };
+    });
+  };
+
+  const getNearbyEmergencyPlaces = async (lat: number, lon: number, radius?: number) => {
+    const result = await apiService.fetchNearbyEmergencyPlaces(lat, lon, radius);
+    if (result.success && Array.isArray(result.places) && result.places.length > 0) {
+      registerDynamicNearbyResources(result.places);
+    }
+    return result;
+  };
+
   return (
     <DisasterContext.Provider
       value={{
@@ -673,8 +696,7 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
         resolveAlert,
         createAuditEvent,
         sendBroadcast,
-        getNearbyEmergencyPlaces: (lat: number, lon: number, radius?: number) =>
-          apiService.fetchNearbyEmergencyPlaces(lat, lon, radius),
+        getNearbyEmergencyPlaces,
         resetState,
       }}
     >
