@@ -10,7 +10,7 @@ import {
 } from '../models/types.js';
 import { repository } from '../utils/repository.js';
 import { NeedsAssessmentAgent } from './needsAssessmentAgent.js';
-import { AllocationAgent } from './allocationAgent.js';
+import { AllocationAgent, calculateHaversineDistance } from './allocationAgent.js';
 
 let ioInstance: SocketIOServer | null = null;
 
@@ -51,7 +51,74 @@ export class CoordinationAgent {
     incident: IIncident;
     assessment: Awaited<ReturnType<typeof NeedsAssessmentAgent.assessIncidentAsync>>;
     recommendation?: any;
+    isDuplicateMerged?: boolean;
+    mergedIntoIncidentId?: string;
   }> {
+    const existingIncidents = await repository.getIncidents();
+    const activeIncidents = existingIncidents.filter(
+      (i) => i.status !== 'RESOLVED' && i.status !== 'CANCELLED'
+    );
+
+    const newLat = incidentData.latitude || 19.0760;
+    const newLon = incidentData.longitude || 72.8777;
+    const newCategory = incidentData.category || 'FLOOD';
+
+    // Duplication Collision Check: 0.5 km (500m) radius and matching category or title keyword
+    const duplicateCollision = activeIncidents.find((existing) => {
+      const distKm = calculateHaversineDistance(existing.latitude, existing.longitude, newLat, newLon);
+      const sameCategory = existing.category === newCategory;
+      const titleKeyword = incidentData.title ? incidentData.title.split(' ')[0] : '';
+      const similarTitle = titleKeyword.length > 3 && existing.title.toLowerCase().includes(titleKeyword.toLowerCase());
+
+      return distKm <= 0.5 && (sameCategory || similarTitle);
+    });
+
+    if (duplicateCollision) {
+      // Merge duplicate report into existing active incident
+      duplicateCollision.peopleTrapped = (duplicateCollision.peopleTrapped || 0) + (incidentData.peopleTrapped || 0);
+      duplicateCollision.injured = (duplicateCollision.injured || 0) + (incidentData.injured || 0);
+      duplicateCollision.peopleAffected = Math.max(
+        duplicateCollision.peopleAffected || 1,
+        (duplicateCollision.peopleAffected || 0) + (incidentData.peopleAffected || 1)
+      );
+
+      if (incidentData.description && !duplicateCollision.description.includes(incidentData.description)) {
+        duplicateCollision.description += ` | [Duplicate Field Report]: ${incidentData.description}`;
+      }
+
+      // Re-assess live AI triage with updated casualty metrics
+      const updatedAssessment = await NeedsAssessmentAgent.assessIncidentAsync(duplicateCollision);
+      duplicateCollision.aiAssessment = updatedAssessment;
+      duplicateCollision.requiredResources = Array.from(
+        new Set([...(duplicateCollision.requiredResources || []), ...updatedAssessment.recommendedResourceTypes])
+      );
+
+      await repository.saveIncident(duplicateCollision);
+
+      emitEvent('incident.updated', duplicateCollision);
+      emitEvent('incident.duplicate_merged', {
+        existingIncidentId: duplicateCollision.id,
+        mergedReport: incidentData,
+        mergedIncident: duplicateCollision,
+      });
+
+      await this.logAudit(
+        'INCIDENT_MERGED_DUPLICATE',
+        `Duplicate report merged into existing incident ${duplicateCollision.id} (500m collision radius). Trapped: ${duplicateCollision.peopleTrapped}, Injured: ${duplicateCollision.injured}.`,
+        'INCIDENT',
+        duplicateCollision.id,
+        undefined,
+        incidentData.source || 'Citizen Reporter Portal'
+      );
+
+      return {
+        incident: duplicateCollision,
+        assessment: updatedAssessment,
+        isDuplicateMerged: true,
+        mergedIntoIncidentId: duplicateCollision.id,
+      };
+    }
+
     const id = incidentData.id || `INC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     const assessment = await NeedsAssessmentAgent.assessIncidentAsync(incidentData);
 
@@ -62,8 +129,8 @@ export class CoordinationAgent {
       category: incidentData.category || 'FLOOD',
       severity: incidentData.severity || 'HIGH',
       status: 'REPORTED',
-      latitude: incidentData.latitude || 19.0760,
-      longitude: incidentData.longitude || 72.8777,
+      latitude: newLat,
+      longitude: newLon,
       reportedAt: new Date().toISOString(),
       peopleAffected: incidentData.peopleAffected || 1,
       peopleTrapped: incidentData.peopleTrapped || 0,
