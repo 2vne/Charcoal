@@ -29,6 +29,7 @@ import {
 import {
   getRankedResourceRecommendations,
   getFacilityFallbackForIncident,
+  calculateHaversineDistance,
 } from '../../utils/aiRecommendationEngine';
 
 interface SituationMapProps {
@@ -38,6 +39,8 @@ interface SituationMapProps {
   selectedIncidentId?: string;
   targetResourceId?: string;
   targetPlace?: EmergencyPlace;
+  radiusMeters?: number;
+  onRadiusChange?: (radiusMeters: number) => void;
   onSelectIncident?: (id: string) => void;
   onUpdateIncidentStatus?: (id: string, status: any) => void;
   height?: string;
@@ -172,6 +175,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
   selectedIncidentId,
   targetResourceId,
   targetPlace,
+  radiusMeters: radiusMetersProp,
+  onRadiusChange,
   onSelectIncident,
   onUpdateIncidentStatus,
   height = '100%',
@@ -196,7 +201,14 @@ export const SituationMap: React.FC<SituationMapProps> = ({
   const [nearbyPlaces, setNearbyPlaces] = useState<EmergencyPlace[]>([]);
   const [isFetchingNearby, setIsFetchingNearby] = useState(false);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
-  const [radiusMeters, setRadiusMeters] = useState<number>(5000);
+  const [localRadiusMeters, setLocalRadiusMeters] = useState<number>(5000);
+
+  const radiusMeters = radiusMetersProp ?? localRadiusMeters;
+
+  const handleRadiusChange = (newVal: number) => {
+    setLocalRadiusMeters(newVal);
+    onRadiusChange?.(newVal);
+  };
 
   // Emergency Place Category Toggles
   const [showHospitals, setShowHospitals] = useState(true);
@@ -216,7 +228,40 @@ export const SituationMap: React.FC<SituationMapProps> = ({
   // Selected incident object
   const selectedIncident = incidents.find((i) => i.id === selectedIncidentId) || incidents[0];
 
-  // Dynamic telemetry aggregates
+  // Filter mobile unit markers strictly inside the selected incident's radius
+  const filteredResourcesInRadius = useMemo(() => {
+    if (!selectedIncident?.location?.lat || !selectedIncident?.location?.lng) return resources;
+    const incLat = selectedIncident.location.lat;
+    const incLng = selectedIncident.location.lng;
+    const radiusKm = radiusMeters / 1000;
+
+    return resources.filter((res) => {
+      if (!res?.currentLocation?.lat || !res?.currentLocation?.lng) return false;
+      const dist = calculateHaversineDistance(
+        res.currentLocation.lat,
+        res.currentLocation.lng,
+        incLat,
+        incLng
+      );
+      return dist <= radiusKm;
+    });
+  }, [resources, selectedIncident, radiusMeters]);
+
+  // Filter shelters strictly inside the selected incident's radius
+  const filteredSheltersInRadius = useMemo(() => {
+    if (!selectedIncident?.location?.lat || !selectedIncident?.location?.lng) return shelters;
+    const incLat = selectedIncident.location.lat;
+    const incLng = selectedIncident.location.lng;
+    const radiusKm = radiusMeters / 1000;
+
+    return shelters.filter((s) => {
+      if (!s?.location?.lat || !s?.location?.lng) return false;
+      const dist = calculateHaversineDistance(s.location.lat, s.location.lng, incLat, incLng);
+      return dist <= radiusKm;
+    });
+  }, [shelters, selectedIncident, radiusMeters]);
+
+  // Dynamic telemetry aggregates inside radius
   const totalStranded = useMemo(
     () => incidents.reduce((sum, inc) => sum + (inc.strandedCount || 0), 0),
     [incidents]
@@ -227,9 +272,9 @@ export const SituationMap: React.FC<SituationMapProps> = ({
     [incidents]
   );
 
-  const deployedResourcesCount = useMemo(
-    () => resources.filter((r) => r.status === 'EN_ROUTE' || r.status === 'ON_SITE').length,
-    [resources]
+  const activeInRadiusResourcesCount = useMemo(
+    () => filteredResourcesInRadius.filter((r) => r.status === 'EN_ROUTE' || r.status === 'ON_SITE').length,
+    [filteredResourcesInRadius]
   );
 
   // Fetch real-time road route for selected incident (strict radius scan & facility fallback)
@@ -400,11 +445,14 @@ export const SituationMap: React.FC<SituationMapProps> = ({
   // Filter POIs strictly by selected radius limit from selected incident and category toggles
   const filteredNearbyPlaces = useMemo(() => {
     if (!selectedIncident?.location?.lat || !selectedIncident?.location?.lng) return [];
+    const incLat = selectedIncident.location.lat;
+    const incLng = selectedIncident.location.lng;
     const radiusKm = radiusMeters / 1000;
 
     return nearbyPlaces.filter((p) => {
+      const dist = calculateHaversineDistance(p.latitude, p.longitude, incLat, incLng);
       // Hide facilities outside the selected search radius relative to the selected incident
-      if (p.distanceKm > radiusKm) return false;
+      if (dist > radiusKm) return false;
 
       // Hide facilities by category toggle
       if (p.type === 'hospital' && !showHospitals) return false;
@@ -479,12 +527,14 @@ export const SituationMap: React.FC<SituationMapProps> = ({
             <div className="text-base font-extrabold text-amber-200">{totalStranded}</div>
           </div>
           <div className="p-1.5 bg-cyan-950/40 border border-cyan-800/60 rounded">
-            <div className="text-cyan-400 font-bold">DEPLOYED</div>
-            <div className="text-base font-extrabold text-cyan-200">{deployedResourcesCount}/{resources.length}</div>
+            <div className="text-cyan-400 font-bold">DEPLOYED ({radiusMeters / 1000}km)</div>
+            <div className="text-base font-extrabold text-cyan-200">
+              {activeInRadiusResourcesCount}/{filteredResourcesInRadius.length}
+            </div>
           </div>
           <div className="p-1.5 bg-emerald-950/40 border border-emerald-800/60 rounded">
-            <div className="text-emerald-400 font-bold">SHELTERS</div>
-            <div className="text-base font-extrabold text-emerald-200">{shelters.length}</div>
+            <div className="text-emerald-400 font-bold">SHELTERS ({radiusMeters / 1000}km)</div>
+            <div className="text-base font-extrabold text-emerald-200">{filteredSheltersInRadius.length}</div>
           </div>
         </div>
 
@@ -534,7 +584,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
             </span>
             <select
               value={radiusMeters}
-              onChange={(e) => setRadiusMeters(parseInt(e.target.value))}
+              onChange={(e) => handleRadiusChange(parseInt(e.target.value))}
               className="bg-slate-900 text-cyan-300 border border-slate-700 text-[10px] rounded px-1 py-0.5 font-mono outline-none"
             >
               <option value={1000}>1 km</option>
@@ -814,11 +864,9 @@ export const SituationMap: React.FC<SituationMapProps> = ({
               );
             })}
 
-        {/* Dynamic Safe Shelter Markers */}
+        {/* Dynamic Safe Shelter Markers (Strictly In-Radius Only) */}
         {showShelters &&
-          shelters
-            .filter((s) => s?.location?.lat && s?.location?.lng)
-            .map((s) => {
+          filteredSheltersInRadius.map((s) => {
               const occ = s.occupied ?? s.currentOccupancy ?? 0;
               const cap = s.capacity || 100;
               const pct = Math.min(100, Math.round((occ / cap) * 100));
@@ -878,11 +926,9 @@ export const SituationMap: React.FC<SituationMapProps> = ({
               );
             })}
 
-        {/* Dynamic Resource Unit Markers */}
+        {/* Dynamic Resource Unit Markers (Strictly In-Radius Only) */}
         {showResources &&
-          resources
-            .filter((res) => res?.currentLocation?.lat && res?.currentLocation?.lng)
-            .map((res) => (
+          filteredResourcesInRadius.map((res) => (
               <Marker
                 key={res.id}
                 position={[res.currentLocation.lat, res.currentLocation.lng]}

@@ -47,18 +47,21 @@ export const DashboardPage: React.FC = () => {
   const [targetResourceId, setTargetResourceId] = useState<string | undefined>();
   const [targetPlace, setTargetPlace] = useState<EmergencyPlace | undefined>();
   const [nearbyPlaces, setNearbyPlaces] = useState<EmergencyPlace[]>([]);
+  const [radiusMeters, setRadiusMeters] = useState<number>(5000);
   const [isResetting, setIsResetting] = useState(false);
+
+  const radiusKm = radiusMeters / 1000;
 
   useEffect(() => {
     const selInc = incidents.find((i) => i.id === selectedIncidentId) || incidents[0];
     if (selInc?.location?.lat && selInc?.location?.lng) {
-      getNearbyEmergencyPlaces(selInc.location.lat, selInc.location.lng, 5000).then((res) => {
+      getNearbyEmergencyPlaces(selInc.location.lat, selInc.location.lng, radiusMeters).then((res) => {
         if (res.success && res.places) {
           setNearbyPlaces(res.places);
         }
       });
     }
-  }, [selectedIncidentId, incidents, getNearbyEmergencyPlaces]);
+  }, [selectedIncidentId, incidents, radiusMeters, getNearbyEmergencyPlaces]);
 
   // Active incident selected
   const activeIncident = useMemo(
@@ -66,7 +69,7 @@ export const DashboardPage: React.FC = () => {
     [incidents, selectedIncidentId]
   );
 
-  // Filter mobile units strictly in 5km radius of active incident
+  // Filter mobile units strictly inside selected incident's radius
   const inRadiusUnits = useMemo(() => {
     if (!activeIncident?.location?.lat) return resources;
     const incLat = activeIncident.location.lat;
@@ -74,9 +77,9 @@ export const DashboardPage: React.FC = () => {
     return resources.filter((r) => {
       const resLat = r.currentLocation?.lat ?? 0;
       const resLng = r.currentLocation?.lng ?? 0;
-      return calculateHaversineDistance(resLat, resLng, incLat, incLng) <= 5.0;
+      return calculateHaversineDistance(resLat, resLng, incLat, incLng) <= radiusKm;
     });
-  }, [resources, activeIncident]);
+  }, [resources, activeIncident, radiusKm]);
 
   const activeInRadiusCount = useMemo(
     () => inRadiusUnits.filter((r) => r.status === 'ON_SITE' || r.status === 'EN_ROUTE').length,
@@ -177,7 +180,7 @@ export const DashboardPage: React.FC = () => {
           <StatCard
             title="Deployed Units (In-Radius)"
             value={`${activeInRadiusCount}/${inRadiusUnits.length}`}
-            subtitle={`Within 5km of ${activeIncident?.title ? activeIncident.title.slice(0, 20) + '...' : 'Incident Zone'}`}
+            subtitle={`Within ${radiusKm}km of ${activeIncident?.title ? activeIncident.title.slice(0, 20) + '...' : 'Incident Zone'}`}
             icon={Truck}
             accentColor="cyan"
             trend={{
@@ -207,7 +210,7 @@ export const DashboardPage: React.FC = () => {
             incidents={incidents}
             resources={resources}
             nearbyPlaces={nearbyPlaces}
-            radiusMeters={5000}
+            radiusMeters={radiusMeters}
             selectedIncidentId={selectedIncidentId}
             onSelectIncident={(id) => {
               setSelectedIncidentId(id);
@@ -258,6 +261,8 @@ export const DashboardPage: React.FC = () => {
               selectedIncidentId={selectedIncidentId}
               targetResourceId={targetResourceId}
               targetPlace={targetPlace}
+              radiusMeters={radiusMeters}
+              onRadiusChange={setRadiusMeters}
               onSelectIncident={(id) => {
                 setSelectedIncidentId(id);
                 setTargetResourceId(undefined);
@@ -275,11 +280,15 @@ export const DashboardPage: React.FC = () => {
             <ResourceSummary
               resources={resources}
               selectedIncident={activeIncident}
-              radiusMeters={5000}
+              radiusMeters={radiusMeters}
             />
           </div>
           <div className="flex-1 min-h-0">
-            <ShelterOverview shelters={shelters} />
+            <ShelterOverview
+              shelters={shelters}
+              selectedIncident={activeIncident}
+              radiusMeters={radiusMeters}
+            />
           </div>
         </div>
       </div>
