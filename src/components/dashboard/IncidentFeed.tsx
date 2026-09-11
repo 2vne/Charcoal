@@ -176,13 +176,13 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
             ? inRadiusRecommendations[0]?.resource.id
             : facilityFallback
             ? `FACILITY:${facilityFallback.place.id}`
-            : allRecommendations[0]?.resource.id || '';
+            : '';
 
           const activeVal = customSelectedTargets[inc.id] || defaultVal;
           const isFacilityActive = activeVal.startsWith('FACILITY:');
 
           const activeResRec = !isFacilityActive
-            ? allRecommendations.find((r) => r.resource.id === activeVal) || inRadiusRecommendations[0] || allRecommendations[0]
+            ? inRadiusRecommendations.find((r) => r.resource.id === activeVal) || inRadiusRecommendations[0]
             : null;
 
           return (
@@ -272,12 +272,18 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
                     )}
                   </div>
 
-                  {/* Dropdown Target Selector */}
+                  {/* Dropdown Target Selector (Only In-Radius Units or Emergency Facility Fallbacks) */}
                   <select
                     value={activeVal}
                     onChange={(e) => handleTargetSelect(inc.id, e.target.value, facilityFallback)}
                     className="w-full bg-slate-900 border border-slate-700 hover:border-cyan-500/60 text-[11px] font-mono text-cyan-300 rounded p-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer transition-all"
                   >
+                    {!hasUnitsInRadius && !facilityFallback && (
+                      <option value="" disabled className="bg-slate-950 text-red-400">
+                        ⚠️ No units or facilities inside {radiusKm}km radius
+                      </option>
+                    )}
+
                     {/* Facility Fallback Option if no units inside radius */}
                     {facilityFallback && (
                       <option value={`FACILITY:${facilityFallback.place.id}`} className="bg-amber-950 text-amber-200 font-bold">
@@ -285,24 +291,13 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
                       </option>
                     )}
 
-                    {/* Units Inside Radius */}
+                    {/* Units Inside Radius Only */}
                     {inRadiusRecommendations.length > 0 && (
                       <optgroup label={`--- Mobile Units Inside ${radiusKm}km Radius ---`}>
                         {inRadiusRecommendations.map((rec, idx) => (
                           <option key={rec.resource.id} value={rec.resource.id} className="bg-slate-950 text-emerald-300">
                             {idx === 0 ? '⭐ AI Recommended: ' : 'In-Radius Unit: '}
                             {rec.resource.callsign} ({rec.resource.category}) • {rec.distanceKm}km (~{rec.etaMinutes}m ETA)
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-
-                    {/* Units Outside Radius */}
-                    {outOfRadiusRecommendations.length > 0 && (
-                      <optgroup label={`--- Backup Units Outside ${radiusKm}km Radius ---`}>
-                        {outOfRadiusRecommendations.map((rec) => (
-                          <option key={rec.resource.id} value={rec.resource.id} className="bg-slate-950 text-slate-400">
-                            Outside Radius: {rec.resource.callsign} ({rec.resource.category}) • {rec.distanceKm}km (~{rec.etaMinutes}m ETA)
                           </option>
                         ))}
                       </optgroup>

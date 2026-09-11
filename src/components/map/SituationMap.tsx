@@ -347,16 +347,15 @@ export const SituationMap: React.FC<SituationMapProps> = ({
         return;
       }
 
-      // ── ROUTING PATH 2: Mobile Resource Unit ──
+      // ── ROUTING PATH 2: Mobile Resource Unit (Strictly In-Radius Only) ──
       const targetId =
         targetResourceId ||
         selectedIncident.dispatchedUnitIds?.[0] ||
-        (hasUnitsInRadius ? inRadiusRecommendations[0]?.resource.id : allRecommendations[0]?.resource.id);
+        (hasUnitsInRadius ? inRadiusRecommendations[0]?.resource.id : undefined);
 
-      const targetResource =
-        resources.find((r) => r.id === targetId || r.callsign === targetId) ||
-        inRadiusRecommendations[0]?.resource ||
-        allRecommendations[0]?.resource;
+      const targetResource = targetId
+        ? resources.find((r) => r.id === targetId || r.callsign === targetId) || inRadiusRecommendations[0]?.resource
+        : undefined;
 
       if (!targetResource || !targetResource.currentLocation?.lat) {
         if (isMounted) {
@@ -385,7 +384,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
         });
         setActiveFacilityDetails(null);
       } else {
-        const recMatch = allRecommendations.find((r) => r.resource.id === targetResource.id);
+        const recMatch = inRadiusRecommendations.find((r) => r.resource.id === targetResource.id);
         const distKm = recMatch?.distanceKm || 2.5;
         const eta = recMatch?.etaMinutes || 8;
         setActiveRoutePositions([
