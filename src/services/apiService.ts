@@ -36,6 +36,12 @@ export function normalizeIncident(inc: any): Incident {
   const injuredCount = inc.injuredCount ?? inc.injured ?? 0;
   const dispatchedUnitIds = inc.dispatchedUnitIds ?? inc.assignedResources ?? [];
   const aiPriorityScore = inc.aiPriorityScore ?? inc.aiAssessment?.priorityScore ?? 50;
+  const zoneScore = inc.zoneScore ?? inc.aiAssessment?.zoneScore;
+  const peopleAffectedScore = inc.peopleAffectedScore ?? inc.aiAssessment?.peopleAffectedScore;
+  const disasterTypeScore = inc.disasterTypeScore ?? inc.aiAssessment?.disasterTypeScore;
+  const urgencyKeywordScore = inc.urgencyKeywordScore ?? inc.aiAssessment?.urgencyKeywordScore;
+  const detectedKeywords = inc.detectedKeywords ?? inc.aiAssessment?.detectedKeywords;
+  const urgencyReasoning = inc.urgencyReasoning ?? inc.aiAssessment?.urgencyReasoning;
   const urgentNeeds = inc.urgentNeeds ?? inc.requiredResources ?? [];
   const reportedBy = inc.reportedBy ?? inc.source ?? 'Field Reporter';
   const etaMinutes = inc.etaMinutes ?? inc.eta;
@@ -55,6 +61,13 @@ export function normalizeIncident(inc: any): Incident {
     description: inc.description || '',
     dispatchedUnitIds,
     aiPriorityScore,
+    zoneScore,
+    peopleAffectedScore,
+    disasterTypeScore,
+    urgencyKeywordScore,
+    detectedKeywords,
+    urgencyReasoning,
+    aiAssessment: inc.aiAssessment,
     etaMinutes,
   };
 }

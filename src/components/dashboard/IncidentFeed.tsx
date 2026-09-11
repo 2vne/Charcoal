@@ -59,23 +59,28 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
             className="group p-3 bg-slate-950/50 border border-slate-800/80 hover:border-slate-700 rounded-lg transition-all cursor-pointer relative"
           >
             <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <SeverityBadge severity={inc.severity} size="sm" />
                 <span className="font-mono text-[10px] text-slate-500">{inc.id}</span>
               </div>
-              <span className="font-mono text-[10px] text-slate-400">{formatTimeAgo(inc.reportedAt)}</span>
+              <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-500/30 font-bold" title="zone_score = log10(people)*20 + disaster_type + keywords">
+                  ZONE {inc.zoneScore ?? inc.aiPriorityScore ?? 50}
+                </span>
+                <span className="text-slate-400">{formatTimeAgo(inc.reportedAt)}</span>
+              </div>
             </div>
 
             <h4 className="font-semibold text-xs text-slate-100 group-hover:text-cyan-400 transition-colors">
               {inc.title}
             </h4>
 
-            <div className="mt-1.5 flex items-center gap-3 text-[11px] font-mono text-slate-400">
+            <div className="mt-1.5 flex items-center justify-between text-[11px] font-mono text-slate-400">
               <span className="flex items-center gap-1 text-slate-400">
                 <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
-                <span className="truncate max-w-[140px]">{inc.location?.address || 'Disaster Area'}</span>
+                <span className="truncate max-w-[130px]">{inc.location?.address || 'Disaster Area'}</span>
               </span>
-              <span className="flex items-center gap-1 text-amber-400">
+              <span className="flex items-center gap-1 text-amber-400 font-semibold">
                 <Users className="w-3 h-3 shrink-0" />
                 <span>Stranded: {inc.strandedCount ?? 0}</span>
               </span>

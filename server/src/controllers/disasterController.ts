@@ -102,8 +102,13 @@ export const disasterController = {
 
   // Incidents
   getIncidents: async (req: Request, res: Response) => {
+    const includeResolved = req.query.includeResolved === 'true';
     const incidents = await repository.getIncidents();
-    res.json(incidents);
+    if (includeResolved) {
+      return res.json(incidents);
+    }
+    const activeIncidents = incidents.filter((i) => i.status !== 'RESOLVED' && i.status !== 'CANCELLED');
+    res.json(activeIncidents);
   },
 
   getIncidentById: async (req: Request, res: Response) => {
@@ -152,11 +157,30 @@ export const disasterController = {
 
     incident.status = status;
     await repository.saveIncident(incident);
+
+    // If resolved, automatically free up assigned resource units
+    if (status === 'RESOLVED') {
+      const resources = await repository.getResources();
+      for (const r of resources) {
+        if (r.assignedIncidentId === id || r.currentAssignment === id) {
+          r.status = 'AVAILABLE';
+          r.assignedIncidentId = undefined;
+          r.currentAssignment = undefined;
+          r.destination = undefined;
+          await repository.saveResource(r);
+          emitEvent('resource.updated', r);
+        }
+      }
+    }
+
     emitEvent('incident.updated', incident);
+    if (status === 'RESOLVED') {
+      emitEvent('incident.resolved', { incidentId: incident.id, incident });
+    }
 
     await CoordinationAgent.logAudit(
       'INCIDENT_STATUS_CHANGED',
-      `Incident ${incident.id} status updated to ${status}`,
+      `Incident ${incident.id} status updated to ${status}${status === 'RESOLVED' ? ' (Removed from active tactical queue & resources released)' : ''}`,
       'INCIDENT',
       incident.id
     );

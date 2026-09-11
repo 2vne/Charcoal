@@ -34,7 +34,25 @@ export interface Incident {
   description: string;
   dispatchedUnitIds?: string[];
   aiPriorityScore?: number;
+  zoneScore?: number;
+  peopleAffectedScore?: number;
+  disasterTypeScore?: number;
+  urgencyKeywordScore?: number;
+  detectedKeywords?: string[];
+  urgencyReasoning?: string;
   etaMinutes?: number;
+  aiAssessment?: {
+    priorityScore: number;
+    zoneScore?: number;
+    peopleAffectedScore?: number;
+    disasterTypeScore?: number;
+    urgencyKeywordScore?: number;
+    detectedKeywords?: string[];
+    recommendedResourceTypes: string[];
+    urgencyReasoning: string;
+    assessedAt: string;
+    agentModel?: string;
+  };
 }
 
 export type ResourceCategory = 'MEDICAL_UNIT' | 'SEARCH_RESCUE' | 'SUPPLY_CONVOY' | 'HEAVY_EQUIPMENT' | 'WATER_VESSEL' | 'HELICOPTER';

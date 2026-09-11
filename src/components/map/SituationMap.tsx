@@ -550,11 +550,15 @@ export const SituationMap: React.FC<SituationMapProps> = ({
         {/* Dynamic Incident Markers */}
         {showIncidents &&
           incidents
-            .filter((inc) => inc?.location?.lat && inc?.location?.lng)
+            .filter((inc) => inc?.location?.lat && inc?.location?.lng && inc.status !== 'RESOLVED' && inc.status !== 'CANCELLED')
             .map((inc) => {
               const isSelected = inc.id === selectedIncidentId;
               const stranded = inc.strandedCount ?? 0;
               const injured = inc.injuredCount ?? 0;
+
+              const affectedCount = Math.max(1, stranded + injured);
+              const logComponent = inc.peopleAffectedScore ?? (Math.round(Math.log10(affectedCount) * 20 * 10) / 10);
+              const calculatedZoneScore = inc.zoneScore ?? inc.aiPriorityScore ?? 50;
 
               return (
                 <Marker
@@ -566,7 +570,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
                   }}
                 >
                   <Popup>
-                    <div className="p-3 font-sans text-xs bg-slate-900 text-slate-100 rounded space-y-2 min-w-[220px]">
+                    <div className="p-3 font-sans text-xs bg-slate-900 text-slate-100 rounded space-y-2 min-w-[240px]">
                       <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
                         <SeverityBadge severity={inc.severity} size="sm" />
                         <span className="font-mono text-[10px] text-slate-400">{inc.id}</span>
@@ -586,6 +590,33 @@ export const SituationMap: React.FC<SituationMapProps> = ({
                         </div>
                       </div>
 
+                      {/* Mathematical Priority & Severity Zone Score breakdown */}
+                      <div className="p-2 bg-slate-950/90 rounded border border-cyan-500/40 font-mono text-[10px] space-y-1 shadow-inner">
+                        <div className="text-cyan-400 font-bold flex items-center justify-between border-b border-slate-800/80 pb-1">
+                          <span className="text-[10px] tracking-wider">ZONE SCORE FORMULA</span>
+                          <span className="text-sm font-extrabold text-cyan-300 px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-700">{calculatedZoneScore}</span>
+                        </div>
+                        <div className="text-[9.5px] text-slate-300 space-y-0.5 pt-0.5">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">log10({affectedCount}) × weight_A(20):</span>
+                            <span className="text-cyan-300 font-bold">+{logComponent}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Disaster Type ({inc.category}):</span>
+                            <span className="text-amber-300 font-bold">+{inc.disasterTypeScore ?? 25}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Urgency Keyword Score:</span>
+                            <span className="text-red-300 font-bold">+{inc.urgencyKeywordScore ?? 0}</span>
+                          </div>
+                        </div>
+                        {inc.urgencyReasoning && (
+                          <p className="text-[9px] text-slate-400 italic pt-1 border-t border-slate-800 leading-tight">
+                            {inc.urgencyReasoning}
+                          </p>
+                        )}
+                      </div>
+
                       {inc.urgentNeeds?.length > 0 && (
                         <div className="flex flex-wrap gap-1 pt-1">
                           {inc.urgentNeeds.map((need) => (
@@ -603,15 +634,26 @@ export const SituationMap: React.FC<SituationMapProps> = ({
                         <span className="text-[10px] font-mono text-slate-400">
                           Status: <strong className="text-slate-200">{inc.status}</strong>
                         </span>
-                        {inc.status === 'REPORTED' && (
+                        {inc.status !== 'RESOLVED' && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onUpdateIncidentStatus?.(inc.id, 'DISPATCHED');
+                              onUpdateIncidentStatus?.(
+                                inc.id,
+                                inc.status === 'REPORTED'
+                                  ? 'DISPATCHED'
+                                  : inc.status === 'DISPATCHED'
+                                  ? 'ON_SITE'
+                                  : 'RESOLVED'
+                              );
                             }}
                             className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/40 transition-colors"
                           >
-                            DISPATCH UNIT
+                            {inc.status === 'REPORTED'
+                              ? 'DISPATCH'
+                              : inc.status === 'DISPATCHED'
+                              ? 'MARK ON-SITE'
+                              : 'RESOLVE'}
                           </button>
                         )}
                       </div>

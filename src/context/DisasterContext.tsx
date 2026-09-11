@@ -94,10 +94,23 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     const handleIncidentUpdated = (rawInc: any) => {
       const inc = normalizeIncident(rawInc);
-      setState((prev) => ({
-        ...prev,
-        incidents: prev.incidents.map((i) => (i.id === inc.id ? inc : i)),
-      }));
+      setState((prev) => {
+        if (inc.status === 'RESOLVED' || inc.status === 'CANCELLED') {
+          return {
+            ...prev,
+            incidents: prev.incidents.filter((i) => i.id !== inc.id),
+            resources: prev.resources.map((r) =>
+              r.assignedIncidentId === inc.id
+                ? { ...r, status: 'AVAILABLE', assignedIncidentId: undefined, etaMinutes: undefined }
+                : r
+            ),
+          };
+        }
+        return {
+          ...prev,
+          incidents: prev.incidents.map((i) => (i.id === inc.id ? inc : i)),
+        };
+      });
     };
 
     const handleResourceDispatched = (payload: { resource: any; incident: any }) => {
@@ -289,19 +302,30 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
   const updateIncidentStatus = (id: string, status: IncidentStatus) => {
     apiService.updateIncidentStatus(id, status);
     setState((prev) => {
-      const updatedIncidents = prev.incidents.map((inc) =>
-        inc.id === id ? { ...inc, status } : inc
-      );
+      const isRemoving = status === 'RESOLVED' || status === 'CANCELLED';
+      const updatedIncidents = isRemoving
+        ? prev.incidents.filter((inc) => inc.id !== id)
+        : prev.incidents.map((inc) => (inc.id === id ? { ...inc, status } : inc));
+
+      const updatedResources = isRemoving
+        ? prev.resources.map((r) =>
+            r.assignedIncidentId === id
+              ? { ...r, status: 'AVAILABLE' as const, assignedIncidentId: undefined, etaMinutes: undefined }
+              : r
+          )
+        : prev.resources;
+
       const updatedAudit = logAudit(
         prev,
         'INCIDENT_STATUS_CHANGED',
         'INCIDENT',
         id,
-        `Changed incident ${id} status to ${status}`
+        `Changed incident ${id} status to ${status}${isRemoving ? ' (Resolved & Removed from live map)' : ''}`
       );
       return {
         ...prev,
         incidents: updatedIncidents,
+        resources: updatedResources,
         auditEvents: updatedAudit,
       };
     });
