@@ -34,7 +34,7 @@ interface DisasterContextType {
   createAuditEvent: (event: Omit<AuditEvent, 'id' | 'timestamp'>) => AuditEvent;
   sendBroadcast: (broadcast: Omit<BroadcastMessage, 'id' | 'timestamp'>) => BroadcastMessage;
   getNearbyEmergencyPlaces: (lat: number, lon: number, radius?: number) => Promise<{ success: boolean; places: EmergencyPlace[]; error?: string }>;
-  resetState: () => void;
+  resetState: () => Promise<void> | void;
 }
 
 const DisasterContext = createContext<DisasterContextType | undefined>(undefined);
@@ -139,8 +139,27 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
       });
     };
 
+    const handleIncidentsReset = (rawIncidents: any[]) => {
+      if (Array.isArray(rawIncidents)) {
+        const normalized = rawIncidents.map(normalizeIncident);
+        setState((prev) => ({
+          ...prev,
+          incidents: normalized,
+          resources: prev.resources.map((r) => ({
+            ...r,
+            status: 'AVAILABLE' as const,
+            currentAssignment: undefined,
+            destination: undefined,
+            eta: undefined,
+          })),
+          allocations: [],
+        }));
+      }
+    };
+
     socket.on('incident.created', handleIncidentCreated);
     socket.on('incident.updated', handleIncidentUpdated);
+    socket.on('incidents.reset', handleIncidentsReset);
     socket.on('resource.dispatched', handleResourceDispatched);
     socket.on('shelter.updated', handleShelterUpdated);
     socket.on('alert.created', handleAlertCreated);
@@ -150,6 +169,7 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
     return () => {
       socket.off('incident.created', handleIncidentCreated);
       socket.off('incident.updated', handleIncidentUpdated);
+      socket.off('incidents.reset', handleIncidentsReset);
       socket.off('resource.dispatched', handleResourceDispatched);
       socket.off('shelter.updated', handleShelterUpdated);
       socket.off('alert.created', handleAlertCreated);
@@ -574,9 +594,27 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
     return newBroadcast;
   };
 
-  const resetState = () => {
-    const defaultState = mockDataService.resetAllToDefault();
-    setState(defaultState);
+  const resetState = async () => {
+    const res = await apiService.resetMockState();
+    if (res && Array.isArray(res.incidents) && res.incidents.length > 0) {
+      setState((prev) => ({
+        ...prev,
+        incidents: res.incidents,
+        resources: res.resources.length > 0
+          ? res.resources
+          : prev.resources.map((r) => ({
+              ...r,
+              status: 'AVAILABLE' as const,
+              currentAssignment: undefined,
+              destination: undefined,
+              eta: undefined,
+            })),
+        allocations: [],
+      }));
+    } else {
+      const defaultState = mockDataService.resetAllToDefault();
+      setState(defaultState);
+    }
   };
 
   return (

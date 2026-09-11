@@ -13,6 +13,7 @@ router.get('/emergency-places/nearby', disasterController.getNearbyEmergencyPlac
 router.get('/incidents', disasterController.getIncidents);
 router.get('/incidents/:id', disasterController.getIncidentById);
 router.post('/incidents', disasterController.createIncident);
+router.post('/incidents/reset-mock', disasterController.resetMockState);
 router.patch('/incidents/:id', disasterController.updateIncident);
 router.patch('/incidents/:id/status', disasterController.updateIncidentStatus);
 

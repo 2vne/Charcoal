@@ -15,6 +15,7 @@ import {
   Truck,
   Home,
   RefreshCcw,
+  Loader2,
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -29,6 +30,7 @@ export const DashboardPage: React.FC = () => {
   } = useDisasterContext();
 
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | undefined>();
+  const [isResetting, setIsResetting] = useState(false);
 
   const criticalCount = incidents.filter((i) => i.severity === 'CRITICAL').length;
   const strandedTotal = incidents.reduce((acc, i) => acc + i.strandedCount, 0);
@@ -36,9 +38,14 @@ export const DashboardPage: React.FC = () => {
   const totalShelterCapacity = shelters.reduce((acc, s) => acc + s.capacity, 0);
   const totalShelterOccupancy = shelters.reduce((acc, s) => acc + s.currentOccupancy, 0);
 
-  const handleResetData = () => {
-    if (window.confirm('Reset all disaster state to initial mock benchmark data?')) {
-      resetState();
+  const handleResetData = async () => {
+    if (window.confirm('Wipe current live incidents and randomly generate new emergency incidents in target sector?')) {
+      try {
+        setIsResetting(true);
+        await resetState();
+      } finally {
+        setIsResetting(false);
+      }
     }
   };
 
@@ -100,10 +107,15 @@ export const DashboardPage: React.FC = () => {
             </div>
             <button
               onClick={handleResetData}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 rounded text-[10px] flex items-center gap-1"
+              disabled={isResetting}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 text-slate-400 hover:text-slate-200 rounded text-[10px] flex items-center gap-1 transition-all"
             >
-              <RefreshCcw className="w-3 h-3" />
-              <span>RESET MOCK STATE</span>
+              {isResetting ? (
+                <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />
+              ) : (
+                <RefreshCcw className="w-3 h-3" />
+              )}
+              <span>{isResetting ? 'GENERATING MOCK STATE...' : 'RESET MOCK STATE'}</span>
             </button>
           </div>
 

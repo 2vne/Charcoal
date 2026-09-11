@@ -118,6 +118,11 @@ export const disasterController = {
     res.status(201).json(result.incident);
   },
 
+  resetMockState: async (req: Request, res: Response) => {
+    const result = await CoordinationAgent.resetMockState();
+    res.json(result);
+  },
+
   updateIncident: async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const incident = await repository.getIncidentById(id);

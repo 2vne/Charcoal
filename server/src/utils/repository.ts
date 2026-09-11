@@ -116,6 +116,24 @@ class UnifiedDisasterRepository {
     return incident;
   }
 
+  public async setIncidents(incidents: IIncident[]): Promise<IIncident[]> {
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.from('incidents').delete().neq('id', 'NONE');
+        await supabase.from('incidents').insert(incidents);
+      } catch (e) {
+        console.warn('[Supabase] Reset incidents error:', e);
+      }
+    }
+    if (isMongoDBConnected()) {
+      await IncidentModel.deleteMany({});
+      await IncidentModel.insertMany(incidents);
+    }
+    this.inMemoryIncidents.clear();
+    incidents.forEach((i) => this.inMemoryIncidents.set(i.id, { ...i }));
+    return incidents;
+  }
+
   // Resources
   public async getResources(): Promise<IResource[]> {
     if (isMongoDBConnected()) {

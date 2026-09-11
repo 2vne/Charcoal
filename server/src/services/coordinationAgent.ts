@@ -237,4 +237,136 @@ export class CoordinationAgent {
 
     return { incident, oldResource, newResource, allocation: newAllocation };
   }
+
+  public static async resetMockState(): Promise<{
+    incidents: IIncident[];
+    resources: IResource[];
+  }> {
+    const sampleIncidents = [
+      {
+        title: 'Severe Flash Flood & Trapped Residents',
+        category: 'FLOOD' as const,
+        description: 'Rapid water level rise submerging ground levels in urban residential sector.',
+      },
+      {
+        title: 'Hospital Emergency Power Grid & Battery Failure',
+        category: 'POWER_OUTAGE' as const,
+        description: 'Main transformer blackout endangering ICU and surgical trauma units.',
+      },
+      {
+        title: 'Hillside Landslide Blocking Primary Evacuation Route',
+        category: 'LANDSLIDE' as const,
+        description: 'Heavy mud and boulder debris obstructing primary transit corridor.',
+      },
+      {
+        title: 'Chemical Storage Facility Toxic Vapor Rupture',
+        category: 'HAZMAT' as const,
+        description: 'Storage tank valve rupture releasing airborne hazardous plume.',
+      },
+      {
+        title: 'Commercial Complex Structural Column Collapse',
+        category: 'STRUCTURAL_COLLAPSE' as const,
+        description: 'Lower floor beam failure trapping maintenance personnel inside.',
+      },
+      {
+        title: 'Brush Wildfire Ignition Near Perimeter Suburb',
+        category: 'WILDFIRE' as const,
+        description: 'High winds pushing perimeter fire towards residential structures.',
+      },
+      {
+        title: 'Substation Explosion & District Blackout',
+        category: 'POWER_OUTAGE' as const,
+        description: 'Electrical explosion disrupting municipal water pumps and emergency shelters.',
+      },
+      {
+        title: 'Coastal Tidal Surge Inundating Bus & Transit Depot',
+        category: 'FLOOD' as const,
+        description: 'High tide surge overflowing sea wall into central transit station.',
+      },
+    ];
+
+    const severities: ('CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW')[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+
+    // Center coordinates for disaster response region
+    const baseLat = 19.0760;
+    const baseLon = 72.8777;
+
+    // Pick 4 to 6 random incidents
+    const count = 4 + Math.floor(Math.random() * 3);
+    const shuffled = [...sampleIncidents].sort(() => 0.5 - Math.random()).slice(0, count);
+
+    const generatedIncidents: IIncident[] = [];
+
+    for (let i = 0; i < shuffled.length; i++) {
+      const sample = shuffled[i];
+      const severity = i === 0 ? 'CRITICAL' : severities[Math.floor(Math.random() * severities.length)];
+      const trapped = Math.floor(6 + Math.random() * 35);
+      const injured = Math.floor(Math.random() * 12);
+      const latOffset = (Math.random() - 0.5) * 0.08;
+      const lonOffset = (Math.random() - 0.5) * 0.09;
+
+      const incData: Partial<IIncident> = {
+        id: `INC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        title: `${sample.title} - Sector ${Math.floor(1 + Math.random() * 12)}`,
+        description: sample.description,
+        category: sample.category,
+        severity,
+        latitude: parseFloat((baseLat + latOffset).toFixed(4)),
+        longitude: parseFloat((baseLon + lonOffset).toFixed(4)),
+        peopleAffected: trapped * 4 + Math.floor(Math.random() * 100),
+        peopleTrapped: trapped,
+        injured,
+        source: 'Automated Mock Radar Simulator',
+      };
+
+      const assessment = await NeedsAssessmentAgent.assessIncidentAsync(incData);
+
+      const incident: IIncident = {
+        id: incData.id!,
+        title: incData.title!,
+        description: incData.description!,
+        category: incData.category!,
+        severity: incData.severity!,
+        status: 'REPORTED',
+        latitude: incData.latitude!,
+        longitude: incData.longitude!,
+        reportedAt: new Date(Date.now() - Math.floor(Math.random() * 20 * 60 * 1000)).toISOString(),
+        peopleAffected: incData.peopleAffected!,
+        peopleTrapped: incData.peopleTrapped!,
+        injured: incData.injured!,
+        requiredResources: assessment.recommendedResourceTypes,
+        assignedResources: [],
+        source: incData.source!,
+        aiAssessment: assessment,
+        eta: 15,
+      };
+
+      generatedIncidents.push(incident);
+    }
+
+    // Save to repository
+    await repository.setIncidents(generatedIncidents);
+
+    // Reset resource assignments to AVAILABLE
+    const resources = await repository.getResources();
+    for (const r of resources) {
+      r.status = 'AVAILABLE';
+      r.currentAssignment = undefined;
+      r.assignedIncidentId = undefined;
+      r.destination = undefined;
+      r.eta = undefined;
+      await repository.saveResource(r);
+    }
+
+    await this.logAudit(
+      'MOCK_STATE_RESET',
+      `Wiped existing live incidents and randomly generated ${generatedIncidents.length} new incidents in target sector.`,
+      'INCIDENT'
+    );
+
+    emitEvent('incidents.reset', generatedIncidents);
+    emitEvent('resources.updated', resources);
+
+    return { incidents: generatedIncidents, resources };
+  }
 }

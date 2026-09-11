@@ -468,4 +468,25 @@ export const apiService = {
     }
     return null;
   },
+
+  resetMockState: async (): Promise<{ incidents: Incident[]; resources: ResourceUnit[] } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/incidents/reset-mock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const rawIncidents = Array.isArray(json.incidents) ? json.incidents : [];
+        const rawResources = Array.isArray(json.resources) ? json.resources : [];
+        return {
+          incidents: rawIncidents.map(normalizeIncident),
+          resources: rawResources.map(normalizeResource),
+        };
+      }
+    } catch (e) {
+      console.error('Failed to reset mock state via REST API', e);
+    }
+    return null;
+  },
 };
