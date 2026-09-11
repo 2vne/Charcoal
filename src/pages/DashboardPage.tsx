@@ -36,6 +36,7 @@ export const DashboardPage: React.FC = () => {
     resources,
     shelters,
     updateIncidentStatus,
+    dispatchResource,
     resetState,
   } = useDisasterContext();
 
@@ -161,8 +162,10 @@ export const DashboardPage: React.FC = () => {
         <div className="lg:col-span-4 h-full overflow-hidden">
           <IncidentFeed
             incidents={incidents}
+            resources={resources}
             onSelectIncident={setSelectedIncidentId}
             onUpdateStatus={updateIncidentStatus}
+            onDispatchResource={dispatchResource}
           />
         </div>
 

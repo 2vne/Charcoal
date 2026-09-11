@@ -1,30 +1,50 @@
 import React, { useState, useMemo } from 'react';
-import { Incident } from '../../types';
+import { Incident, ResourceUnit } from '../../types';
 import { SeverityBadge } from '../common/SeverityBadge';
 import { formatTimeAgo } from '../../utils/formatters';
-import { AlertTriangle, MapPin, Users, ChevronRight, TrendingUp } from 'lucide-react';
+import { AlertTriangle, MapPin, Users, ChevronRight, TrendingUp, Zap } from 'lucide-react';
 
 interface IncidentFeedProps {
   incidents: Incident[];
+  resources?: ResourceUnit[];
   onSelectIncident?: (id: string) => void;
   onUpdateStatus?: (id: string, status: Incident['status']) => void;
+  onDispatchResource?: (incidentId: string, resourceId: string, etaMinutes?: number) => void;
+}
+
+/**
+ * Picks the best available resource for a given incident.
+ * Prefers resources matching required types; falls back to any AVAILABLE unit.
+ */
+function pickBestResource(resources: ResourceUnit[], incident: Incident): ResourceUnit | null {
+  const available = resources.filter((r) => r.status === 'AVAILABLE');
+  if (!available.length) return null;
+
+  const needed = incident.urgentNeeds ?? [];
+
+  // Try to match by category
+  const matched = available.find((r) =>
+    needed.some((n) => r.category?.toUpperCase().includes(n.replace(/_/g, '')) || n.includes(r.category?.toUpperCase() ?? ''))
+  );
+  return matched ?? available[0];
 }
 
 export const IncidentFeed: React.FC<IncidentFeedProps> = ({
   incidents,
+  resources = [],
   onSelectIncident,
   onUpdateStatus,
+  onDispatchResource,
 }) => {
   const [filter, setFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH'>('ALL');
 
-  // Filter first, then sort by zone score descending (highest threat first)
+  // Filter then sort by zone score descending
   const sortedIncidents = useMemo(() => {
     const filtered = incidents.filter((inc) => {
       if (filter === 'CRITICAL') return inc.severity === 'CRITICAL';
       if (filter === 'HIGH') return inc.severity === 'HIGH' || inc.severity === 'CRITICAL';
       return true;
     });
-
     return [...filtered].sort((a, b) => {
       const scoreA = a.zoneScore ?? a.aiPriorityScore ?? 0;
       const scoreB = b.zoneScore ?? b.aiPriorityScore ?? 0;
@@ -32,11 +52,30 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
     });
   }, [incidents, filter]);
 
-  const getRankColor = (rank: number) => {
-    if (rank === 0) return 'text-red-400 border-red-500/60 bg-red-950/60';
-    if (rank === 1) return 'text-orange-400 border-orange-500/60 bg-orange-950/60';
-    if (rank === 2) return 'text-amber-400 border-amber-500/60 bg-amber-950/60';
-    return 'text-slate-400 border-slate-600/60 bg-slate-900/60';
+  const getRankStyle = (rank: number) => {
+    if (rank === 0) return { badge: 'text-red-400 border-red-500/60 bg-red-950/60', bar: '#ef4444' };
+    if (rank === 1) return { badge: 'text-orange-400 border-orange-500/60 bg-orange-950/60', bar: '#f97316' };
+    if (rank === 2) return { badge: 'text-amber-400 border-amber-500/60 bg-amber-950/60', bar: '#f59e0b' };
+    return { badge: 'text-slate-400 border-slate-600/60 bg-slate-900/60', bar: '#334155' };
+  };
+
+  const handleDispatch = (e: React.MouseEvent, inc: Incident) => {
+    e.stopPropagation();
+
+    if (inc.status === 'REPORTED') {
+      // Auto-pick best resource and call dispatchResource directly
+      const best = pickBestResource(resources, inc);
+      if (best && onDispatchResource) {
+        onDispatchResource(inc.id, best.id, 15);
+      } else {
+        // No resources available — just flip status
+        onUpdateStatus?.(inc.id, 'DISPATCHED');
+      }
+    } else if (inc.status === 'DISPATCHED') {
+      onUpdateStatus?.(inc.id, 'ON_SITE');
+    } else if (inc.status === 'ON_SITE') {
+      onUpdateStatus?.(inc.id, 'RESOLVED');
+    }
   };
 
   return (
@@ -72,7 +111,7 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
         </div>
       </div>
 
-      {/* Incident Stream — sorted by zone score */}
+      {/* Incident Stream */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {sortedIncidents.length === 0 && (
           <div className="flex flex-col items-center justify-center h-40 text-slate-500 font-mono text-xs text-center gap-2">
@@ -82,8 +121,9 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
         )}
         {sortedIncidents.map((inc, index) => {
           const zoneScore = inc.zoneScore ?? inc.aiPriorityScore ?? 0;
-          const rankColor = getRankColor(index);
+          const { badge: rankBadge, bar: rankBar } = getRankStyle(index);
           const isTopRisk = index === 0;
+          const bestResource = inc.status === 'REPORTED' ? pickBestResource(resources, inc) : null;
 
           return (
             <div
@@ -95,15 +135,15 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
                   : 'border-slate-800/80 hover:border-slate-700'
               }`}
             >
-              {/* Rank Badge */}
-              <div className="absolute -left-px top-2 bottom-2 w-0.5 rounded-full"
-                style={{ background: isTopRisk ? '#ef4444' : index === 1 ? '#f97316' : index === 2 ? '#f59e0b' : '#334155' }}
+              {/* Left rank bar */}
+              <div
+                className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full"
+                style={{ background: rankBar }}
               />
 
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-1.5">
-                  {/* Rank number */}
-                  <span className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-mono font-extrabold border ${rankColor}`}>
+                  <span className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-mono font-extrabold border ${rankBadge}`}>
                     {index + 1}
                   </span>
                   <SeverityBadge severity={inc.severity} size="sm" />
@@ -118,7 +158,7 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
                         ? 'bg-orange-950/80 text-orange-400 border-orange-500/40'
                         : 'bg-cyan-950/80 text-cyan-400 border-cyan-500/30'
                     }`}
-                    title="zone_score = log10(people)*20 + disaster_type + urgency_keywords"
+                    title="zone_score = log10(people)×20 + disaster_type + urgency_keywords"
                   >
                     ⚡ {zoneScore}
                   </span>
@@ -154,18 +194,12 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
                 }`}>
                   {inc.status}
                 </span>
+
                 <div className="flex items-center gap-1">
                   {inc.status !== 'RESOLVED' && inc.status !== 'CANCELLED' && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const nextStatus =
-                          inc.status === 'REPORTED' ? 'DISPATCHED'
-                          : inc.status === 'DISPATCHED' ? 'ON_SITE'
-                          : 'RESOLVED';
-                        onUpdateStatus?.(inc.id, nextStatus);
-                      }}
-                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all ${
+                      onClick={(e) => handleDispatch(e, inc)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all flex items-center gap-1 ${
                         inc.status === 'REPORTED'
                           ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/40'
                           : inc.status === 'DISPATCHED'
@@ -173,8 +207,11 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
                           : 'bg-emerald-600/30 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/40'
                       }`}
                     >
+                      {inc.status === 'REPORTED' && <Zap className="w-2.5 h-2.5" />}
                       {inc.status === 'REPORTED'
-                        ? 'DISPATCH'
+                        ? bestResource
+                          ? `DISPATCH ${bestResource.callsign ?? bestResource.category}`
+                          : 'DISPATCH'
                         : inc.status === 'DISPATCHED'
                         ? 'MARK ON-SITE'
                         : 'RESOLVE'}
