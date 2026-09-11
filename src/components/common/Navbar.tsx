@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   Send
 } from 'lucide-react';
-import { StatusIndicator } from './StatusIndicator';
 
 export const Navbar: React.FC = () => {
   const location = useLocation();
@@ -33,26 +32,14 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-50 bg-[#090D16]/95 backdrop-blur border-b border-slate-800">
-      {/* Top Telemetry Bar */}
+      {/* Top Utility Bar */}
       <div className="bg-slate-950 border-b border-slate-800/80 px-4 py-1.5 flex items-center justify-between text-xs font-mono text-slate-400">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-            <span className="text-red-400 font-bold tracking-wider">DEFCON 2</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-300">DISASTER DISPATCH ACTIVE</span>
-          </div>
-          <div className="hidden md:flex items-center gap-2 text-slate-400">
-            <StatusIndicator status="active" label="AGENTIC TELEMETRY: SYNCED" />
-          </div>
+        <div className="flex items-center gap-2">
+          <Clock className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-cyan-300 font-bold">{timeStr}</span>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-1 text-slate-400">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-cyan-300 font-bold">{timeStr}</span>
-          </div>
-          
           {/* Quick Mode Switcher */}
           <NavLink
             to={isReporterMode ? '/' : '/report'}
@@ -88,9 +75,6 @@ export const Navbar: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="font-mono font-extrabold text-lg tracking-wider text-slate-100">
                 PS20
-              </span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-semibold">
-                TACTICAL EOC
               </span>
             </div>
             <p className="text-[10px] font-mono text-slate-400 hidden sm:block">

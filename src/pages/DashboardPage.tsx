@@ -5,9 +5,6 @@ import { SituationMap } from '../components/map/SituationMap';
 import { IncidentFeed } from '../components/dashboard/IncidentFeed';
 import { ResourceSummary } from '../components/dashboard/ResourceSummary';
 import { ShelterOverview } from '../components/dashboard/ShelterOverview';
-import { EmergencyBroadcast } from '../components/dashboard/EmergencyBroadcast';
-
-import { WeatherPanel } from '../components/dashboard/WeatherPanel';
 
 import {
   AlertTriangle,
@@ -23,9 +20,7 @@ export const DashboardPage: React.FC = () => {
     incidents,
     resources,
     shelters,
-    broadcasts,
     updateIncidentStatus,
-    sendBroadcast,
     resetState,
   } = useDisasterContext();
 
@@ -133,19 +128,13 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: Weather Intelligence, Resources, Shelters & Broadcast Panel */}
+        {/* Right Column: Resources & Shelters */}
         <div className="lg:col-span-3 h-full flex flex-col gap-3 overflow-hidden">
-          <div className="h-1/4 min-h-0">
-            <WeatherPanel />
-          </div>
-          <div className="h-1/4 min-h-0">
+          <div className="flex-1 min-h-0">
             <ResourceSummary resources={resources} />
           </div>
-          <div className="h-1/4 min-h-0">
+          <div className="flex-1 min-h-0">
             <ShelterOverview shelters={shelters} />
-          </div>
-          <div className="h-1/4 min-h-0">
-            <EmergencyBroadcast broadcasts={broadcasts} onAddBroadcast={sendBroadcast} />
           </div>
         </div>
       </div>
