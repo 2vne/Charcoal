@@ -441,7 +441,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
     };
   }, [selectedIncidentId, selectedIncident, radiusMeters]);
 
-  // Filter POIs strictly by selected radius limit from selected incident and category toggles
+  // Filter POIs strictly by selected radius limit from selected incident, category toggles,
+  // and deduplicate against deployed units (if an emergency facility overlaps with a unit, show ONLY the unit marker)
   const filteredNearbyPlaces = useMemo(() => {
     if (!selectedIncident?.location?.lat || !selectedIncident?.location?.lng) return [];
     const incLat = selectedIncident.location.lat;
@@ -459,9 +460,36 @@ export const SituationMap: React.FC<SituationMapProps> = ({
       if (p.type === 'police_station' && !showPolice) return false;
       if (p.type === 'ngo' && !showNgos) return false;
       if (p.type === 'rescue' && !showRescue) return false;
+
+      // Deduplication Rule: If an active resource unit in radius is at the same location (within ~80m),
+      // hide the facility marker so ONLY the unit marker is shown at that location.
+      const isOverlappingWithUnit = filteredResourcesInRadius.some((res) => {
+        if (!res?.currentLocation?.lat || !res?.currentLocation?.lng) return false;
+        if (res.id === `RES-OSM-${p.id}`) return true;
+        const distToRes = calculateHaversineDistance(
+          p.latitude,
+          p.longitude,
+          res.currentLocation.lat,
+          res.currentLocation.lng
+        );
+        return distToRes < 0.08;
+      });
+
+      if (isOverlappingWithUnit) return false;
+
       return true;
     });
-  }, [nearbyPlaces, radiusMeters, selectedIncident, showHospitals, showFireStations, showPolice, showNgos, showRescue]);
+  }, [
+    nearbyPlaces,
+    radiusMeters,
+    selectedIncident,
+    showHospitals,
+    showFireStations,
+    showPolice,
+    showNgos,
+    showRescue,
+    filteredResourcesInRadius,
+  ]);
 
   // Calculate Road ETA to external POI
   const handleCalculateETA = async (place: EmergencyPlace) => {
