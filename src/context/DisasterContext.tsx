@@ -123,6 +123,14 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
       }));
     };
 
+    const handleResourceUpdated = (rawRes: any) => {
+      const resource = normalizeResource(rawRes);
+      setState((prev) => ({
+        ...prev,
+        resources: prev.resources.map((r) => (r.id === resource.id ? resource : r)),
+      }));
+    };
+
     const handleShelterUpdated = (rawShl: any) => {
       const shl = normalizeShelter(rawShl);
       setState((prev) => ({
@@ -174,6 +182,7 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
     socket.on('incident.updated', handleIncidentUpdated);
     socket.on('incidents.reset', handleIncidentsReset);
     socket.on('resource.dispatched', handleResourceDispatched);
+    socket.on('resource.updated', handleResourceUpdated);
     socket.on('shelter.updated', handleShelterUpdated);
     socket.on('alert.created', handleAlertCreated);
     socket.on('audit.created', handleAuditCreated);
@@ -184,6 +193,7 @@ export const DisasterProvider: React.FC<{ children: ReactNode }> = ({ children }
       socket.off('incident.updated', handleIncidentUpdated);
       socket.off('incidents.reset', handleIncidentsReset);
       socket.off('resource.dispatched', handleResourceDispatched);
+      socket.off('resource.updated', handleResourceUpdated);
       socket.off('shelter.updated', handleShelterUpdated);
       socket.off('alert.created', handleAlertCreated);
       socket.off('audit.created', handleAuditCreated);

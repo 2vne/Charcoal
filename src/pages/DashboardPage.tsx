@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useDisasterContext } from '../context/DisasterContext';
 import { StatCard } from '../components/common/StatCard';
 import { SituationMap } from '../components/map/SituationMap';
@@ -15,6 +15,21 @@ import {
   Loader2,
 } from 'lucide-react';
 
+/** Hook that flashes a boolean for 600ms whenever `value` changes */
+function useFlash(value: unknown): boolean {
+  const [flashing, setFlashing] = useState(false);
+  const prevRef = useRef(value);
+  useEffect(() => {
+    if (prevRef.current !== value) {
+      prevRef.current = value;
+      setFlashing(true);
+      const t = setTimeout(() => setFlashing(false), 600);
+      return () => clearTimeout(t);
+    }
+  }, [value]);
+  return flashing;
+}
+
 export const DashboardPage: React.FC = () => {
   const {
     incidents,
@@ -27,11 +42,57 @@ export const DashboardPage: React.FC = () => {
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | undefined>();
   const [isResetting, setIsResetting] = useState(false);
 
-  const criticalCount = incidents.filter((i) => i.severity === 'CRITICAL').length;
-  const strandedTotal = incidents.reduce((acc, i) => acc + i.strandedCount, 0);
-  const activeResources = resources.filter((r) => r.status === 'ON_SITE' || r.status === 'EN_ROUTE').length;
-  const totalShelterCapacity = shelters.reduce((acc, s) => acc + s.capacity, 0);
-  const totalShelterOccupancy = shelters.reduce((acc, s) => acc + s.currentOccupancy, 0);
+  // ── Derived live metrics (auto-reactive to any context state change) ─────────
+  const criticalCount = useMemo(
+    () => incidents.filter((i) => i.severity === 'CRITICAL').length,
+    [incidents]
+  );
+
+  const strandedTotal = useMemo(
+    () => incidents.reduce((acc, i) => acc + (i.strandedCount ?? 0), 0),
+    [incidents]
+  );
+
+  const activeResources = useMemo(
+    () => resources.filter((r) => r.status === 'ON_SITE' || r.status === 'EN_ROUTE').length,
+    [resources]
+  );
+
+  const availableResources = useMemo(
+    () => resources.filter((r) => r.status === 'AVAILABLE').length,
+    [resources]
+  );
+
+  const totalShelterCapacity = useMemo(
+    () => shelters.reduce((acc, s) => acc + s.capacity, 0),
+    [shelters]
+  );
+
+  const totalShelterOccupancy = useMemo(
+    () => shelters.reduce((acc, s) => acc + s.currentOccupancy, 0),
+    [shelters]
+  );
+
+  const shelterPct = useMemo(
+    () => Math.round((totalShelterOccupancy / (totalShelterCapacity || 1)) * 100),
+    [totalShelterOccupancy, totalShelterCapacity]
+  );
+
+  const awaitingDispatch = useMemo(
+    () => incidents.filter((i) => i.status === 'REPORTED').length,
+    [incidents]
+  );
+
+  const injuredTotal = useMemo(
+    () => incidents.reduce((acc, i) => acc + (i.injuredCount || 0), 0),
+    [incidents]
+  );
+
+  // Flash effects — fire when each derived value changes
+  const criticalFlash = useFlash(criticalCount);
+  const strandedFlash = useFlash(strandedTotal);
+  const deployedFlash = useFlash(activeResources);
+  const shelterFlash = useFlash(shelterPct);
 
   const handleResetData = async () => {
     if (isResetting) return;
@@ -47,45 +108,56 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="flex-1 p-3 md:p-4 space-y-4 max-w-[1800px] mx-auto w-full">
-      {/* Metric Cards Row */}
+      {/* Live Metric Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
-          title="Critical Emergencies"
-          value={criticalCount}
-          subtitle="Life-Threatening Triage Priority"
-          icon={AlertTriangle}
-          accentColor="red"
-          trend={{ value: `${incidents.filter((i) => i.status === 'REPORTED').length} Awaiting Dispatch`, isPositive: false }}
-        />
-        <StatCard
-          title="Stranded Citizens"
-          value={strandedTotal}
-          subtitle="Awaiting Rescue / Evacuation"
-          icon={Users}
-          accentColor="orange"
-          trend={{ value: `${incidents.reduce((acc, i) => acc + (i.injuredCount || 0), 0)} Injured Total`, isPositive: false }}
-        />
-        <StatCard
-          title="Deployed Units"
-          value={`${activeResources}/${resources.length}`}
-          subtitle="Medevac & Rescue Teams"
-          icon={Truck}
-          accentColor="cyan"
-          trend={{ value: `${resources.filter((r) => r.status === 'AVAILABLE').length} Reserve Units Ready`, isPositive: true }}
-        />
-        <StatCard
-          title="Shelter Capacity"
-          value={`${Math.round((totalShelterOccupancy / (totalShelterCapacity || 1)) * 100)}%`}
-          subtitle={`${totalShelterOccupancy} / ${totalShelterCapacity} Occupied`}
-          icon={Home}
-          accentColor="emerald"
-          trend={{ value: `${shelters.filter((s) => s.status !== 'CLOSED').length} Safe Shelters Open`, isPositive: true }}
-        />
+        <div className={`transition-all duration-300 ${criticalFlash ? 'ring-2 ring-red-500/60 rounded-r-lg scale-[1.01]' : ''}`}>
+          <StatCard
+            title="Critical Emergencies"
+            value={criticalCount}
+            subtitle="Life-Threatening Triage Priority"
+            icon={AlertTriangle}
+            accentColor="red"
+            trend={{ value: `${awaitingDispatch} Awaiting Dispatch`, isPositive: false }}
+          />
+        </div>
+
+        <div className={`transition-all duration-300 ${strandedFlash ? 'ring-2 ring-orange-500/60 rounded-r-lg scale-[1.01]' : ''}`}>
+          <StatCard
+            title="Stranded Citizens"
+            value={strandedTotal}
+            subtitle="Awaiting Rescue / Evacuation"
+            icon={Users}
+            accentColor="orange"
+            trend={{ value: `${injuredTotal} Injured Total`, isPositive: false }}
+          />
+        </div>
+
+        <div className={`transition-all duration-300 ${deployedFlash ? 'ring-2 ring-cyan-500/60 rounded-r-lg scale-[1.01]' : ''}`}>
+          <StatCard
+            title="Deployed Units"
+            value={`${activeResources}/${resources.length}`}
+            subtitle="En Route & On-Site Units"
+            icon={Truck}
+            accentColor="cyan"
+            trend={{ value: `${availableResources} Reserve Units Ready`, isPositive: availableResources > 0 }}
+          />
+        </div>
+
+        <div className={`transition-all duration-300 ${shelterFlash ? 'ring-2 ring-emerald-500/60 rounded-r-lg scale-[1.01]' : ''}`}>
+          <StatCard
+            title="Shelter Capacity"
+            value={`${shelterPct}%`}
+            subtitle={`${totalShelterOccupancy} / ${totalShelterCapacity} Occupied`}
+            icon={Home}
+            accentColor="emerald"
+            trend={{ value: `${shelters.filter((s) => s.status !== 'CLOSED').length} Safe Shelters Open`, isPositive: true }}
+          />
+        </div>
       </div>
 
       {/* Main EOC Command Center Layout Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[750px]">
-        {/* Left Column: Live Incident Stream & Triage */}
+        {/* Left: Live Incident Stream ranked by zone score */}
         <div className="lg:col-span-4 h-full overflow-hidden">
           <IncidentFeed
             incidents={incidents}
@@ -94,7 +166,7 @@ export const DashboardPage: React.FC = () => {
           />
         </div>
 
-        {/* Center Column: Live Situation Map & Tactical Map Controls */}
+        {/* Center: Live Situation Map */}
         <div className="lg:col-span-5 h-full flex flex-col gap-3">
           <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 p-2.5 rounded-lg font-mono text-xs text-slate-300">
             <div className="flex items-center gap-2">
@@ -128,7 +200,7 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: Resources & Shelters */}
+        {/* Right: Resources & Shelters */}
         <div className="lg:col-span-3 h-full flex flex-col gap-3 overflow-hidden">
           <div className="flex-1 min-h-0">
             <ResourceSummary resources={resources} />
