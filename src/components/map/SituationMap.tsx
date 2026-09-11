@@ -26,7 +26,10 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { getRankedResourceRecommendations } from '../../utils/aiRecommendationEngine';
+import {
+  getRankedResourceRecommendations,
+  getFacilityFallbackForIncident,
+} from '../../utils/aiRecommendationEngine';
 
 interface SituationMapProps {
   incidents?: Incident[];
@@ -34,6 +37,7 @@ interface SituationMapProps {
   resources?: ResourceUnit[];
   selectedIncidentId?: string;
   targetResourceId?: string;
+  targetPlace?: EmergencyPlace;
   onSelectIncident?: (id: string) => void;
   onUpdateIncidentStatus?: (id: string, status: any) => void;
   height?: string;
@@ -167,6 +171,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
   resources = [],
   selectedIncidentId,
   targetResourceId,
+  targetPlace,
   onSelectIncident,
   onUpdateIncidentStatus,
   height = '100%',
@@ -174,6 +179,11 @@ export const SituationMap: React.FC<SituationMapProps> = ({
   const [activeRoutePositions, setActiveRoutePositions] = useState<[number, number][]>([]);
   const [activeRouteDetails, setActiveRouteDetails] = useState<{
     resource: ResourceUnit;
+    distanceKm: number;
+    durationMinutes: number;
+  } | null>(null);
+  const [activeFacilityDetails, setActiveFacilityDetails] = useState<{
+    place: EmergencyPlace;
     distanceKm: number;
     durationMinutes: number;
   } | null>(null);
@@ -222,7 +232,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
     [resources]
   );
 
-  // Fetch real-time road route for selected incident and target / AI recommended resource unit
+  // Fetch real-time road route for selected incident (strict radius scan & facility fallback)
   useEffect(() => {
     let isMounted = true;
     const fetchRouteForActiveIncident = async () => {
@@ -230,35 +240,92 @@ export const SituationMap: React.FC<SituationMapProps> = ({
         if (isMounted) {
           setActiveRoutePositions([]);
           setActiveRouteDetails(null);
+          setActiveFacilityDetails(null);
         }
         return;
       }
 
-      // Determine target resource for routing
-      const recs = getRankedResourceRecommendations(selectedIncident, resources);
+      const incLat = selectedIncident.location.lat;
+      const incLng = selectedIncident.location.lng;
+
+      // Check if target is explicitly an emergency place POI or FACILITY selection
+      let selectedFacility: EmergencyPlace | undefined = targetPlace;
+
+      if (!selectedFacility && targetResourceId && targetResourceId.startsWith('FACILITY:')) {
+        const facId = targetResourceId.replace('FACILITY:', '');
+        selectedFacility = nearbyPlaces.find((p) => p.id === facId);
+      }
+
+      // Check mobile resources strictly within radius
+      const { inRadiusRecommendations, allRecommendations, hasUnitsInRadius } =
+        getRankedResourceRecommendations(selectedIncident, resources, radiusMeters);
+
+      // If no units in radius and no facility explicitly passed, calculate facility fallback
+      if (!selectedFacility && !hasUnitsInRadius && !targetResourceId) {
+        const fallback = getFacilityFallbackForIncident(selectedIncident, nearbyPlaces, radiusMeters);
+        if (fallback) {
+          selectedFacility = fallback.place;
+        }
+      }
+
+      // ── ROUTING PATH 1: Emergency Facility Support POI Fallback ──
+      if (selectedFacility) {
+        const facLat = selectedFacility.latitude;
+        const facLng = selectedFacility.longitude;
+
+        const estimate = await apiService.fetchRouteEstimate(facLat, facLng, incLat, incLng);
+        if (!isMounted) return;
+
+        if (estimate && estimate.geometry && estimate.geometry.coordinates) {
+          const latLngs: [number, number][] = estimate.geometry.coordinates.map(
+            ([lon, lat]: [number, number]) => [lat, lon]
+          );
+          setActiveRoutePositions(latLngs);
+          setActiveFacilityDetails({
+            place: selectedFacility,
+            distanceKm: estimate.distanceKm,
+            durationMinutes: estimate.durationMinutes,
+          });
+          setActiveRouteDetails(null);
+        } else {
+          setActiveRoutePositions([
+            [facLat, facLng],
+            [incLat, incLng],
+          ]);
+          setActiveFacilityDetails({
+            place: selectedFacility,
+            distanceKm: selectedFacility.distanceKm || 2.0,
+            durationMinutes: Math.round((selectedFacility.distanceKm || 2.0) * 1.8 + 2),
+          });
+          setActiveRouteDetails(null);
+        }
+        return;
+      }
+
+      // ── ROUTING PATH 2: Mobile Resource Unit ──
       const targetId =
         targetResourceId ||
         selectedIncident.dispatchedUnitIds?.[0] ||
-        recs[0]?.resource.id;
+        (hasUnitsInRadius ? inRadiusRecommendations[0]?.resource.id : allRecommendations[0]?.resource.id);
 
       const targetResource =
-        resources.find((r) => r.id === targetId || r.callsign === targetId) || recs[0]?.resource;
+        resources.find((r) => r.id === targetId || r.callsign === targetId) ||
+        inRadiusRecommendations[0]?.resource ||
+        allRecommendations[0]?.resource;
 
       if (!targetResource || !targetResource.currentLocation?.lat) {
         if (isMounted) {
           setActiveRoutePositions([]);
           setActiveRouteDetails(null);
+          setActiveFacilityDetails(null);
         }
         return;
       }
 
       const resLat = targetResource.currentLocation.lat;
       const resLng = targetResource.currentLocation.lng;
-      const incLat = selectedIncident.location.lat;
-      const incLng = selectedIncident.location.lng;
 
       const estimate = await apiService.fetchRouteEstimate(resLat, resLng, incLat, incLng);
-
       if (!isMounted) return;
 
       if (estimate && estimate.geometry && estimate.geometry.coordinates) {
@@ -271,8 +338,9 @@ export const SituationMap: React.FC<SituationMapProps> = ({
           distanceKm: estimate.distanceKm,
           durationMinutes: estimate.durationMinutes,
         });
+        setActiveFacilityDetails(null);
       } else {
-        const recMatch = recs.find((r) => r.resource.id === targetResource.id);
+        const recMatch = allRecommendations.find((r) => r.resource.id === targetResource.id);
         const distKm = recMatch?.distanceKm || 2.5;
         const eta = recMatch?.etaMinutes || 8;
         setActiveRoutePositions([
@@ -284,6 +352,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
           distanceKm: distKm,
           durationMinutes: eta,
         });
+        setActiveFacilityDetails(null);
       }
     };
 
@@ -291,7 +360,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [selectedIncidentId, selectedIncident, targetResourceId, resources]);
+  }, [selectedIncidentId, selectedIncident, targetResourceId, targetPlace, resources, nearbyPlaces, radiusMeters]);
 
   // Fetch real-world nearby POIs from Overpass backend service when selected incident or search radius changes
   useEffect(() => {
@@ -540,7 +609,28 @@ export const SituationMap: React.FC<SituationMapProps> = ({
       </div>
 
       {/* Dynamic Route Trajectory HUD Banner */}
-      {activeRouteDetails && selectedIncident && (
+      {activeFacilityDetails && selectedIncident ? (
+        <div className="absolute bottom-3 left-3 z-[1000] bg-slate-950/95 backdrop-blur-md border border-amber-500/60 rounded-lg p-2.5 shadow-2xl font-mono text-xs text-slate-100 max-w-[440px] transition-all ring-1 ring-amber-500/30">
+          <div className="flex items-center justify-between text-[10px] font-bold text-amber-400 border-b border-slate-800 pb-1 mb-1.5">
+            <span className="flex items-center gap-1.5">
+              <Navigation className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              EMERGENCY FACILITY ROUTE (RADIUS FALLBACK)
+            </span>
+            <span className="text-[9px] text-amber-300 bg-amber-950/80 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono">
+              STRICT RADIUS SCAN
+            </span>
+          </div>
+          <div className="text-[11px] font-semibold text-slate-200 truncate">
+            Facility: <span className="text-amber-300 font-bold">{activeFacilityDetails.place.name}</span> ({activeFacilityDetails.place.type})
+            <span className="text-slate-400"> ➔ Target: </span>
+            <span className="text-cyan-300 font-bold">{selectedIncident.title}</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between text-[10px] font-mono text-slate-400">
+            <span>Facility Distance: <strong className="text-slate-200">{activeFacilityDetails.distanceKm} km</strong></span>
+            <span>Est. Response Time: <strong className="text-amber-400 font-bold">{activeFacilityDetails.durationMinutes} mins</strong></span>
+          </div>
+        </div>
+      ) : activeRouteDetails && selectedIncident ? (
         <div className="absolute bottom-3 left-3 z-[1000] bg-slate-950/95 backdrop-blur-md border border-cyan-500/50 rounded-lg p-2.5 shadow-2xl font-mono text-xs text-slate-100 max-w-[420px] transition-all">
           <div className="flex items-center justify-between text-[10px] font-bold text-cyan-400 border-b border-slate-800 pb-1 mb-1.5">
             <span className="flex items-center gap-1.5">
@@ -561,7 +651,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
             <span>Estimated Travel ETA: <strong className="text-cyan-400 font-bold">{activeRouteDetails.durationMinutes} mins</strong></span>
           </div>
         </div>
-      )}
+      ) : null}
 
       <MapContainer
         center={[MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng]}

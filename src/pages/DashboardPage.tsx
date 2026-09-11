@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useDisasterContext } from '../context/DisasterContext';
+import { EmergencyPlace } from '../types';
 import { StatCard } from '../components/common/StatCard';
 import { SituationMap } from '../components/map/SituationMap';
 import { IncidentFeed } from '../components/dashboard/IncidentFeed';
@@ -37,12 +38,26 @@ export const DashboardPage: React.FC = () => {
     shelters,
     updateIncidentStatus,
     dispatchResource,
+    getNearbyEmergencyPlaces,
     resetState,
   } = useDisasterContext();
 
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | undefined>();
   const [targetResourceId, setTargetResourceId] = useState<string | undefined>();
+  const [targetPlace, setTargetPlace] = useState<EmergencyPlace | undefined>();
+  const [nearbyPlaces, setNearbyPlaces] = useState<EmergencyPlace[]>([]);
   const [isResetting, setIsResetting] = useState(false);
+
+  useEffect(() => {
+    const selInc = incidents.find((i) => i.id === selectedIncidentId) || incidents[0];
+    if (selInc?.location?.lat && selInc?.location?.lng) {
+      getNearbyEmergencyPlaces(selInc.location.lat, selInc.location.lng, 5000).then((res) => {
+        if (res.success && res.places) {
+          setNearbyPlaces(res.places);
+        }
+      });
+    }
+  }, [selectedIncidentId, incidents, getNearbyEmergencyPlaces]);
 
   // ── Derived live metrics (auto-reactive to any context state change) ─────────
   const criticalCount = useMemo(
@@ -164,14 +179,23 @@ export const DashboardPage: React.FC = () => {
           <IncidentFeed
             incidents={incidents}
             resources={resources}
+            nearbyPlaces={nearbyPlaces}
+            radiusMeters={5000}
             selectedIncidentId={selectedIncidentId}
             onSelectIncident={(id) => {
               setSelectedIncidentId(id);
               setTargetResourceId(undefined);
+              setTargetPlace(undefined);
             }}
             onSelectResourceForRoute={(incId, resId) => {
               setSelectedIncidentId(incId);
               setTargetResourceId(resId);
+              setTargetPlace(undefined);
+            }}
+            onSelectPlaceForRoute={(incId, place) => {
+              setSelectedIncidentId(incId);
+              setTargetPlace(place);
+              setTargetResourceId(`FACILITY:${place.id}`);
             }}
             onUpdateStatus={updateIncidentStatus}
             onDispatchResource={dispatchResource}
@@ -206,9 +230,11 @@ export const DashboardPage: React.FC = () => {
               resources={resources}
               selectedIncidentId={selectedIncidentId}
               targetResourceId={targetResourceId}
+              targetPlace={targetPlace}
               onSelectIncident={(id) => {
                 setSelectedIncidentId(id);
                 setTargetResourceId(undefined);
+                setTargetPlace(undefined);
               }}
               onUpdateIncidentStatus={updateIncidentStatus}
               height="100%"

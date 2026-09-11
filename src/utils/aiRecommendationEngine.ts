@@ -1,4 +1,4 @@
-import { Incident, ResourceUnit } from '../types';
+import { Incident, ResourceUnit, EmergencyPlace } from '../types';
 
 export interface ResourceRecommendation {
   resource: ResourceUnit;
@@ -7,6 +7,15 @@ export interface ResourceRecommendation {
   isTypeMatch: boolean;
   matchScore: number;
   stationName: string;
+  aiReason: string;
+  isWithinRadius: boolean;
+}
+
+export interface FacilityRecommendation {
+  place: EmergencyPlace;
+  distanceKm: number;
+  etaMinutes: number;
+  isFacilityFallback: true;
   aiReason: string;
 }
 
@@ -34,12 +43,12 @@ export function calculateHaversineDistance(
 
 /**
  * Evaluates a single resource against an incident using disaster classification rules,
- * station matching (e.g. Fire Station for Fires, Port Base for Floods, Medical Base for Trauma),
- * distance, and ETA.
+ * station matching, distance, and ETA.
  */
 export function evaluateResourceForIncident(
   incident: Incident,
-  resource: ResourceUnit
+  resource: ResourceUnit,
+  radiusMeters: number = 5000
 ): ResourceRecommendation {
   const incLat = incident.location?.lat ?? 19.076;
   const incLng = incident.location?.lng ?? 72.8777;
@@ -48,6 +57,8 @@ export function evaluateResourceForIncident(
 
   const distanceKm = calculateHaversineDistance(resLat, resLng, incLat, incLng);
   const etaMinutes = Math.max(2, Math.round(distanceKm * 1.8 + 3));
+  const radiusKm = radiusMeters / 1000;
+  const isWithinRadius = distanceKm <= radiusKm;
 
   const cat = (incident.category || '').toUpperCase();
   const titleDesc = `${incident.title} ${incident.description || ''}`.toLowerCase();
@@ -128,10 +139,11 @@ export function evaluateResourceForIncident(
   let matchScore = 100 - distanceKm * 2.5 - etaMinutes * 1.5;
   if (isTypeMatch) matchScore += 55;
   if (resource.status === 'AVAILABLE') matchScore += 20;
+  if (isWithinRadius) matchScore += 40; // Bonus score for units strictly inside incident radius
 
-  const aiReason = `[GPT-4o-mini AI Dispatch] Recommend deploying ${resource.callsign} from ${stationName} for ${incident.category} disaster. ${
-    isTypeMatch ? 'Direct disaster capability match' : 'Secondary tactical support'
-  } (${distanceKm} km shortest route, ~${etaMinutes} mins ETA).`;
+  const aiReason = `[Radius AI Dispatch] Unit ${resource.callsign} (${resource.category}) from ${stationName} — ${
+    isWithinRadius ? `Inside ${radiusKm}km radius` : `Outside ${radiusKm}km radius`
+  }, ${distanceKm} km shortest route, ~${etaMinutes} mins ETA.`;
 
   return {
     resource,
@@ -141,21 +153,132 @@ export function evaluateResourceForIncident(
     matchScore,
     stationName,
     aiReason,
+    isWithinRadius,
   };
 }
 
 /**
- * Returns a sorted list of resource recommendations for a given incident,
- * highest scoring (AI recommended) unit first.
+ * Categorizes and ranks resource recommendations for an incident into units strictly inside
+ * the radius versus units outside the radius.
  */
 export function getRankedResourceRecommendations(
   incident: Incident,
-  resources: ResourceUnit[]
-): ResourceRecommendation[] {
-  if (!resources || resources.length === 0) return [];
+  resources: ResourceUnit[],
+  radiusMeters: number = 5000
+): {
+  inRadiusRecommendations: ResourceRecommendation[];
+  outOfRadiusRecommendations: ResourceRecommendation[];
+  allRecommendations: ResourceRecommendation[];
+  hasUnitsInRadius: boolean;
+} {
+  if (!resources || resources.length === 0) {
+    return {
+      inRadiusRecommendations: [],
+      outOfRadiusRecommendations: [],
+      allRecommendations: [],
+      hasUnitsInRadius: false,
+    };
+  }
+
+  const radiusKm = radiusMeters / 1000;
   const available = resources.filter((r) => r.status === 'AVAILABLE');
   const pool = available.length > 0 ? available : resources;
 
-  const evaluated = pool.map((res) => evaluateResourceForIncident(incident, res));
-  return evaluated.sort((a, b) => b.matchScore - a.matchScore);
+  const evaluated = pool.map((res) => evaluateResourceForIncident(incident, res, radiusMeters));
+  evaluated.sort((a, b) => b.matchScore - a.matchScore);
+
+  const inRadius = evaluated.filter((r) => r.isWithinRadius);
+  const outOfRadius = evaluated.filter((r) => !r.isWithinRadius);
+
+  return {
+    inRadiusRecommendations: inRadius,
+    outOfRadiusRecommendations: outOfRadius,
+    allRecommendations: evaluated,
+    hasUnitsInRadius: inRadius.length > 0,
+  };
+}
+
+/**
+ * Fallback Engine: When no mobile unit is available inside the incident radius,
+ * scans real-world emergency places (OSM POIs: hospital, fire_station, police_station, rescue, ngo)
+ * strictly within the radius and selects the next best facility for routing.
+ */
+export function getFacilityFallbackForIncident(
+  incident: Incident,
+  nearbyPlaces: EmergencyPlace[],
+  radiusMeters: number = 5000
+): FacilityRecommendation | null {
+  if (!nearbyPlaces || nearbyPlaces.length === 0) return null;
+  const radiusKm = radiusMeters / 1000;
+
+  // Filter facilities strictly within radius
+  const withinRadius = nearbyPlaces.filter((p) => p.distanceKm <= radiusKm);
+  if (withinRadius.length === 0) return null;
+
+  const cat = (incident.category || '').toUpperCase();
+  const titleDesc = `${incident.title} ${incident.description || ''}`.toLowerCase();
+
+  let preferredTypes: string[] = [];
+  if (
+    cat.includes('FIRE') ||
+    cat.includes('HAZMAT') ||
+    titleDesc.includes('fire') ||
+    titleDesc.includes('blaze')
+  ) {
+    preferredTypes = ['fire_station', 'rescue', 'hospital', 'police_station', 'ngo'];
+  } else if (
+    cat.includes('MEDICAL') ||
+    titleDesc.includes('injury') ||
+    titleDesc.includes('hospital')
+  ) {
+    preferredTypes = ['hospital', 'rescue', 'police_station', 'ngo', 'fire_station'];
+  } else if (
+    cat.includes('FLOOD') ||
+    cat.includes('TSUNAMI') ||
+    cat.includes('LANDSLIDE') ||
+    titleDesc.includes('water')
+  ) {
+    preferredTypes = ['rescue', 'ngo', 'fire_station', 'hospital', 'police_station'];
+  } else if (
+    cat.includes('EARTHQUAKE') ||
+    cat.includes('COLLAPSE') ||
+    titleDesc.includes('rubble')
+  ) {
+    preferredTypes = ['rescue', 'fire_station', 'hospital', 'police_station', 'ngo'];
+  } else {
+    preferredTypes = ['police_station', 'rescue', 'hospital', 'fire_station', 'ngo'];
+  }
+
+  const sorted = [...withinRadius].sort((a, b) => {
+    const prefA = preferredTypes.indexOf(a.type);
+    const prefB = preferredTypes.indexOf(b.type);
+    const rankA = prefA === -1 ? 99 : prefA;
+    const rankB = prefB === -1 ? 99 : prefB;
+
+    if (rankA !== rankB) return rankA - rankB;
+    return a.distanceKm - b.distanceKm;
+  });
+
+  const bestPlace = sorted[0];
+  if (!bestPlace) return null;
+
+  const etaMinutes = Math.max(2, Math.round(bestPlace.distanceKm * 1.8 + 2));
+  const typeLabel =
+    bestPlace.type === 'hospital'
+      ? 'Hospital'
+      : bestPlace.type === 'fire_station'
+      ? 'Fire Station'
+      : bestPlace.type === 'police_station'
+      ? 'Police Station'
+      : bestPlace.type === 'rescue'
+      ? 'Rescue Depot'
+      : 'Emergency NGO';
+
+  return {
+    place: bestPlace,
+    distanceKm: bestPlace.distanceKm,
+    etaMinutes,
+    isFacilityFallback: true,
+    aiReason: `[Strict Radius Fallback] No mobile units within ${radiusKm}km radius. Auto-routing to nearest ${typeLabel}: ${bestPlace.name} (${bestPlace.distanceKm} km, ~${etaMinutes}m ETA).`,
+  };
 }
