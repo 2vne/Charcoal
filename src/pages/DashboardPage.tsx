@@ -53,11 +53,24 @@ export const DashboardPage: React.FC = () => {
   const radiusKm = radiusMeters / 1000;
 
   useEffect(() => {
+    setNearbyPlaces([]);
+  }, [selectedIncidentId]);
+
+  useEffect(() => {
     const selInc = incidents.find((i) => i.id === selectedIncidentId) || incidents[0];
     if (selInc?.location?.lat && selInc?.location?.lng) {
       getNearbyEmergencyPlaces(selInc.location.lat, selInc.location.lng, radiusMeters).then((res) => {
-        if (res.success && res.places) {
-          setNearbyPlaces(res.places);
+        if (res.success && Array.isArray(res.places)) {
+          setNearbyPlaces((prev) => {
+            const nextMap: Record<string, EmergencyPlace> = {};
+            prev.forEach((p) => {
+              if (p?.id) nextMap[p.id] = p;
+            });
+            res.places.forEach((p) => {
+              if (p?.id) nextMap[p.id] = p;
+            });
+            return Object.values(nextMap);
+          });
         }
       });
     }

@@ -406,6 +406,11 @@ export const SituationMap: React.FC<SituationMapProps> = ({
     };
   }, [selectedIncidentId, selectedIncident, targetResourceId, targetPlace, resources, nearbyPlaces, radiusMeters]);
 
+  // Reset nearby places cache when selected incident changes
+  useEffect(() => {
+    setNearbyPlaces([]);
+  }, [selectedIncidentId]);
+
   // Fetch real-world nearby POIs from Overpass backend service when selected incident or search radius changes
   useEffect(() => {
     let isMounted = true;
@@ -425,11 +430,20 @@ export const SituationMap: React.FC<SituationMapProps> = ({
 
       if (isMounted) {
         setIsFetchingNearby(false);
-        if (res.success) {
-          setNearbyPlaces(res.places || []);
-        } else {
-          setNearbyError(res.error || 'Nearby emergency services temporarily unavailable');
-          setNearbyPlaces([]);
+        if (res.success && Array.isArray(res.places)) {
+          setNearbyPlaces((prev) => {
+            const nextMap: Record<string, EmergencyPlace> = {};
+            // Accumulate and preserve existing places from smaller radiuses
+            prev.forEach((p) => {
+              if (p?.id) nextMap[p.id] = p;
+            });
+            res.places.forEach((p) => {
+              if (p?.id) nextMap[p.id] = p;
+            });
+            return Object.values(nextMap);
+          });
+        } else if (res.error) {
+          setNearbyError(res.error);
         }
       }
     };
