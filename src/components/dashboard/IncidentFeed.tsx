@@ -2,41 +2,44 @@ import React, { useState, useMemo } from 'react';
 import { Incident, ResourceUnit } from '../../types';
 import { SeverityBadge } from '../common/SeverityBadge';
 import { formatTimeAgo } from '../../utils/formatters';
-import { AlertTriangle, MapPin, Users, ChevronRight, TrendingUp, Zap } from 'lucide-react';
+import {
+  getRankedResourceRecommendations,
+  ResourceRecommendation,
+} from '../../utils/aiRecommendationEngine';
+import {
+  AlertTriangle,
+  MapPin,
+  Users,
+  ChevronRight,
+  TrendingUp,
+  Zap,
+  Bot,
+  Sparkles,
+  ShieldAlert,
+} from 'lucide-react';
 
 interface IncidentFeedProps {
   incidents: Incident[];
   resources?: ResourceUnit[];
+  selectedIncidentId?: string;
   onSelectIncident?: (id: string) => void;
+  onSelectResourceForRoute?: (incidentId: string, resourceId: string) => void;
   onUpdateStatus?: (id: string, status: Incident['status']) => void;
   onDispatchResource?: (incidentId: string, resourceId: string, etaMinutes?: number) => void;
-}
-
-/**
- * Picks the best available resource for a given incident.
- * Prefers resources matching required types; falls back to any AVAILABLE unit.
- */
-function pickBestResource(resources: ResourceUnit[], incident: Incident): ResourceUnit | null {
-  const available = resources.filter((r) => r.status === 'AVAILABLE');
-  if (!available.length) return null;
-
-  const needed = incident.urgentNeeds ?? [];
-
-  // Try to match by category
-  const matched = available.find((r) =>
-    needed.some((n) => r.category?.toUpperCase().includes(n.replace(/_/g, '')) || n.includes(r.category?.toUpperCase() ?? ''))
-  );
-  return matched ?? available[0];
 }
 
 export const IncidentFeed: React.FC<IncidentFeedProps> = ({
   incidents,
   resources = [],
+  selectedIncidentId,
   onSelectIncident,
+  onSelectResourceForRoute,
   onUpdateStatus,
   onDispatchResource,
 }) => {
   const [filter, setFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH'>('ALL');
+  // Tracks custom dropdown selections per incident: { [incidentId]: resourceId }
+  const [customSelectedUnits, setCustomSelectedUnits] = useState<Record<string, string>>({});
 
   // Filter then sort by zone score descending
   const sortedIncidents = useMemo(() => {
@@ -59,16 +62,20 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
     return { badge: 'text-slate-400 border-slate-600/60 bg-slate-900/60', bar: '#334155' };
   };
 
-  const handleDispatch = (e: React.MouseEvent, inc: Incident) => {
+  const handleUnitSelect = (incidentId: string, resourceId: string) => {
+    setCustomSelectedUnits((prev) => ({ ...prev, [incidentId]: resourceId }));
+    onSelectResourceForRoute?.(incidentId, resourceId);
+  };
+
+  const handleDispatch = (e: React.MouseEvent, inc: Incident, activeResourceId?: string) => {
     e.stopPropagation();
 
     if (inc.status === 'REPORTED') {
-      // Auto-pick best resource and call dispatchResource directly
-      const best = pickBestResource(resources, inc);
-      if (best && onDispatchResource) {
-        onDispatchResource(inc.id, best.id, 15);
+      if (activeResourceId && onDispatchResource) {
+        const chosenRes = resources.find((r) => r.id === activeResourceId);
+        const eta = chosenRes?.etaMinutes || 12;
+        onDispatchResource(inc.id, activeResourceId, eta);
       } else {
-        // No resources available — just flip status
         onUpdateStatus?.(inc.id, 'DISPATCHED');
       }
     } else if (inc.status === 'DISPATCHED') {
@@ -112,10 +119,10 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
       </div>
 
       {/* Incident Stream */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+      <div className="flex-1 overflow-y-auto p-2 space-y-2.5">
         {sortedIncidents.length === 0 && (
           <div className="flex flex-col items-center justify-center h-40 text-slate-500 font-mono text-xs text-center gap-2">
-            <AlertTriangle className="w-8 h-8 text-slate-700" />
+            <ShieldAlert className="w-8 h-8 text-slate-700" />
             <p>No active incidents</p>
           </div>
         )}
@@ -123,14 +130,34 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
           const zoneScore = inc.zoneScore ?? inc.aiPriorityScore ?? 0;
           const { badge: rankBadge, bar: rankBar } = getRankStyle(index);
           const isTopRisk = index === 0;
-          const bestResource = inc.status === 'REPORTED' ? pickBestResource(resources, inc) : null;
+          const isSelected = selectedIncidentId === inc.id;
+
+          // Rank available resources for this specific disaster incident
+          const recommendations = getRankedResourceRecommendations(inc, resources);
+          const topRec = recommendations[0];
+
+          // Determine currently selected resource ID for this incident
+          const activeResourceId =
+            customSelectedUnits[inc.id] ||
+            topRec?.resource.id ||
+            resources.find((r) => r.status === 'AVAILABLE')?.id;
+
+          const currentRec =
+            recommendations.find((r) => r.resource.id === activeResourceId) || topRec;
 
           return (
             <div
               key={inc.id}
-              onClick={() => onSelectIncident?.(inc.id)}
-              className={`group p-3 bg-slate-950/50 border rounded-lg transition-all cursor-pointer relative ${
-                isTopRisk
+              onClick={() => {
+                onSelectIncident?.(inc.id);
+                if (activeResourceId) {
+                  onSelectResourceForRoute?.(inc.id, activeResourceId);
+                }
+              }}
+              className={`group p-3 bg-slate-950/60 border rounded-lg transition-all cursor-pointer relative ${
+                isSelected
+                  ? 'border-cyan-400 ring-1 ring-cyan-400/50 bg-slate-900/90 shadow-md shadow-cyan-950/50'
+                  : isTopRisk
                   ? 'border-red-500/40 shadow-sm shadow-red-900/30'
                   : 'border-slate-800/80 hover:border-slate-700'
               }`}
@@ -181,6 +208,53 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
                 </span>
               </div>
 
+              {/* Dynamic LLM Resource Recommendation & Dropdown Unit Selector */}
+              {inc.status === 'REPORTED' && (
+                <div
+                  className="mt-2.5 pt-2 border-t border-slate-800/80 space-y-1.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between font-mono text-[10px]">
+                    <span className="text-cyan-400 font-bold flex items-center gap-1">
+                      <Bot className="w-3 h-3 text-cyan-400 animate-pulse" />
+                      LLM AI DISPATCH RECOMMENDATION:
+                    </span>
+                    {currentRec && (
+                      <span className="text-slate-400 text-[9px] font-semibold truncate max-w-[140px]">
+                        {currentRec.stationName}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Dropdown Selector for Units */}
+                  <select
+                    value={activeResourceId || ''}
+                    onChange={(e) => handleUnitSelect(inc.id, e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 hover:border-cyan-500/60 text-[11px] font-mono text-cyan-300 rounded p-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer transition-all"
+                  >
+                    {recommendations.map((rec, idx) => (
+                      <option key={rec.resource.id} value={rec.resource.id} className="bg-slate-950 text-slate-200">
+                        {idx === 0 ? '⭐ AI Recommended: ' : 'Alt Unit Option: '}
+                        {rec.resource.callsign} ({rec.resource.category}) • {rec.distanceKm}km (~{rec.etaMinutes}m ETA)
+                      </option>
+                    ))}
+                    {recommendations.length === 0 && (
+                      <option value="" disabled className="bg-slate-950 text-slate-500">
+                        No resources available
+                      </option>
+                    )}
+                  </select>
+
+                  {/* AI Rationale Summary Text */}
+                  {currentRec && (
+                    <div className="text-[10px] font-mono text-slate-300 bg-cyan-950/40 border border-cyan-800/40 rounded p-1.5 flex items-start gap-1.5 leading-relaxed">
+                      <Sparkles className="w-3 h-3 text-cyan-400 shrink-0 mt-0.5" />
+                      <span>{currentRec.aiReason}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Quick Action Bar */}
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between">
                 <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
@@ -198,20 +272,20 @@ export const IncidentFeed: React.FC<IncidentFeedProps> = ({
                 <div className="flex items-center gap-1">
                   {inc.status !== 'RESOLVED' && inc.status !== 'CANCELLED' && (
                     <button
-                      onClick={(e) => handleDispatch(e, inc)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all flex items-center gap-1 ${
+                      onClick={(e) => handleDispatch(e, inc, activeResourceId)}
+                      className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold border transition-all flex items-center gap-1 ${
                         inc.status === 'REPORTED'
-                          ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/40'
+                          ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/40 shadow-sm shadow-cyan-950/50'
                           : inc.status === 'DISPATCHED'
                           ? 'bg-amber-600/30 text-amber-300 border-amber-500/40 hover:bg-amber-500/40'
                           : 'bg-emerald-600/30 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/40'
                       }`}
                     >
-                      {inc.status === 'REPORTED' && <Zap className="w-2.5 h-2.5" />}
+                      {inc.status === 'REPORTED' && <Zap className="w-3 h-3 text-cyan-400" />}
                       {inc.status === 'REPORTED'
-                        ? bestResource
-                          ? `DISPATCH ${bestResource.callsign ?? bestResource.category}`
-                          : 'DISPATCH'
+                        ? currentRec
+                          ? `DISPATCH ${currentRec.resource.callsign}`
+                          : 'DISPATCH UNIT'
                         : inc.status === 'DISPATCHED'
                         ? 'MARK ON-SITE'
                         : 'RESOLVE'}

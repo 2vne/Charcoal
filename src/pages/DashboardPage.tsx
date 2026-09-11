@@ -41,6 +41,7 @@ export const DashboardPage: React.FC = () => {
   } = useDisasterContext();
 
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | undefined>();
+  const [targetResourceId, setTargetResourceId] = useState<string | undefined>();
   const [isResetting, setIsResetting] = useState(false);
 
   // ── Derived live metrics (auto-reactive to any context state change) ─────────
@@ -163,7 +164,15 @@ export const DashboardPage: React.FC = () => {
           <IncidentFeed
             incidents={incidents}
             resources={resources}
-            onSelectIncident={setSelectedIncidentId}
+            selectedIncidentId={selectedIncidentId}
+            onSelectIncident={(id) => {
+              setSelectedIncidentId(id);
+              setTargetResourceId(undefined);
+            }}
+            onSelectResourceForRoute={(incId, resId) => {
+              setSelectedIncidentId(incId);
+              setTargetResourceId(resId);
+            }}
             onUpdateStatus={updateIncidentStatus}
             onDispatchResource={dispatchResource}
           />
@@ -196,7 +205,11 @@ export const DashboardPage: React.FC = () => {
               shelters={shelters}
               resources={resources}
               selectedIncidentId={selectedIncidentId}
-              onSelectIncident={setSelectedIncidentId}
+              targetResourceId={targetResourceId}
+              onSelectIncident={(id) => {
+                setSelectedIncidentId(id);
+                setTargetResourceId(undefined);
+              }}
               onUpdateIncidentStatus={updateIncidentStatus}
               height="100%"
             />

@@ -118,6 +118,16 @@ export const disasterController = {
     res.json(incident);
   },
 
+  getRecommendationForIncident: async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const incident = await repository.getIncidentById(id);
+    if (!incident) return res.status(404).json({ error: 'Incident not found' });
+
+    const { AllocationAgent } = await import('../services/allocationAgent.js');
+    const recommendation = await AllocationAgent.recommendAllocation(incident);
+    res.json({ success: true, recommendation });
+  },
+
   createIncident: async (req: Request, res: Response) => {
     const result = await CoordinationAgent.handleNewIncident(req.body);
     res.status(201).json(result.incident);
